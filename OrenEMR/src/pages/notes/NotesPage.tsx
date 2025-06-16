@@ -92,7 +92,7 @@ const NotesPage: React.FC = () => {
       params.append('page', page.toString());
       params.append('limit', limit.toString());
       
-      const response = await axios.get(`/api/notes?${params.toString()}`);
+      const response = await axios.get(`http://localhost:5000/api/notes?${params.toString()}`);
       setNotes(response.data.notes || []);
       
       // Safely access pagination data with fallback values
@@ -121,8 +121,8 @@ const NotesPage: React.FC = () => {
   const fetchFilterData = async () => {
     try {
       const [patientsResponse, doctorsResponse] = await Promise.all([
-        axios.get('/api/patients?limit=1000'),
-        axios.get('/api/auth/doctors')
+        axios.get('http://localhost:5000/api/patients?limit=1000'),
+        axios.get('http://localhost:5000/api/auth/doctors')
       ]);
       
       setPatients(patientsResponse.data.patients);
@@ -170,7 +170,7 @@ const NotesPage: React.FC = () => {
   const handleDeleteNote = async (noteId: string) => {
     if (window.confirm('Are you sure you want to delete this note?')) {
       try {
-        await axios.delete(`/api/notes/${noteId}`);
+        await axios.delete(`http://localhost:5000/api/notes/${noteId}`);
         toast.success('Note deleted successfully');
         fetchNotes();
       } catch (error) {

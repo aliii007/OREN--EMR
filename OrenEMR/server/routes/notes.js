@@ -25,9 +25,36 @@ const __dirname = dirname(__filename);
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const folder = 'uploads/notes';
-    fs.mkdirSync(folder, { recursive: true });
-    cb(null, folder);
+    try {
+      // Use absolute path for uploads folder
+      const uploadDir = path.join(process.cwd(), 'uploads/notes');
+      console.log('Upload directory:', uploadDir);
+      
+      // Check if directory exists
+      const dirExists = fs.existsSync(uploadDir);
+      console.log('Directory exists:', dirExists);
+      
+      // Create directory if it doesn't exist
+      if (!dirExists) {
+        console.log('Creating directory:', uploadDir);
+        fs.mkdirSync(uploadDir, { recursive: true });
+        console.log('Directory created successfully');
+      }
+      
+      // Check if directory is writable
+      try {
+        fs.accessSync(uploadDir, fs.constants.W_OK);
+        console.log('Upload directory is writable');
+      } catch (accessError) {
+        console.error('Directory is not writable:', accessError);
+        return cb(new Error('Upload directory is not writable'));
+      }
+      
+      cb(null, uploadDir);
+    } catch (error) {
+      console.error('Error setting upload destination:', error);
+      cb(error);
+    }
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -51,10 +78,25 @@ const upload = multer({
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only images, PDFs, and office documents are allowed.'));
+      cb(new Error(`Invalid file type: ${file.mimetype}. Only images, PDFs, and office documents are allowed.`));
     }
   }
 });
+
+// Error handling middleware for multer errors
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    console.error('Multer error:', err);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: 'File too large. Maximum size is 10MB.' });
+    }
+    return res.status(400).json({ message: `File upload error: ${err.message}` });
+  } else if (err) {
+    console.error('Other upload error:', err);
+    return res.status(400).json({ message: err.message });
+  }
+  next();
+};
 
 // Get all notes (with pagination and filtering)
 router.get('/', authenticateToken, async (req, res) => {
@@ -88,7 +130,7 @@ router.get('/', authenticateToken, async (req, res) => {
     // Access control based on user role
     if (req.user.role === 'doctor') {
       // Doctors can only see their own notes
-      query.doctor = req.user._id;
+      query.doctor = req.user.id;
     }
     
     // Calculate pagination
@@ -137,7 +179,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
     
     // Access control
-    if (req.user.role === 'doctor' && note.doctor.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'doctor' && note.doctor.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: 'Not authorized to access this note' });
     }
     
@@ -149,8 +191,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create a new note
-router.post('/', authenticateToken, upload.array('attachments', 5), async (req, res) => {
+router.post('/', authenticateToken, upload.array('attachments', 5), handleMulterError, async (req, res) => {
   try {
+    console.log('Creating new note with data:', req.body);
+    console.log('Files received:', req.files);
+    
     const { 
       title, 
       content, 
@@ -183,13 +228,29 @@ router.post('/', authenticateToken, upload.array('attachments', 5), async (req, 
     }
     
     // Process file uploads
-    const attachments = req.files ? req.files.map(file => ({
-      filename: file.filename,
-      originalname: file.originalname,
-      path: file.path,
-      mimetype: file.mimetype,
-      size: file.size
-    })) : [];
+    let attachments = [];
+    try {
+      if (req.files && req.files.length > 0) {
+        console.log('Processing file uploads, count:', req.files.length);
+        attachments = req.files.map(file => {
+          console.log('Processing file:', file.originalname);
+          return {
+            filename: file.filename,
+            originalname: file.originalname,
+            path: file.path,
+            mimetype: file.mimetype,
+            size: file.size
+          };
+        });
+        console.log('File processing complete');
+      } else {
+        console.log('No files to process');
+      }
+    } catch (fileError) {
+      console.error('Error processing files:', fileError);
+      // Continue without attachments rather than failing the whole request
+      attachments = [];
+    }
     
     // Parse JSON strings if they come as strings
     let parsedDiagnosisCodes = diagnosisCodes;
@@ -218,7 +279,7 @@ router.post('/', authenticateToken, upload.array('attachments', 5), async (req, 
       noteType: noteType || 'Progress',
       colorCode: colorCode || '#FFFFFF',
       patient: patientId,
-      doctor: req.user._id,
+      doctor: req.user.id, // Changed from req.user._id to req.user.id
       visit: visitId || null,
       diagnosisCodes: parsedDiagnosisCodes || [],
       treatmentCodes: parsedTreatmentCodes || [],
@@ -237,12 +298,46 @@ router.post('/', authenticateToken, upload.array('attachments', 5), async (req, 
     res.status(201).json(populatedNote);
   } catch (error) {
     console.error('Error creating note:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error stack:', error.stack);
+    
+    // Provide more detailed error information
+    let errorMessage = 'Server error';
+    let statusCode = 500;
+    let errorDetails = null;
+    
+    if (error.name === 'ValidationError') {
+      errorMessage = 'Validation error';
+      statusCode = 400;
+      console.error('Validation error details:', error.errors);
+      errorDetails = error.errors;
+    } else if (error.name === 'CastError') {
+      errorMessage = `Invalid ID format: ${error.value}`;
+      statusCode = 400;
+      errorDetails = { path: error.path, value: error.value };
+    } else if (error.code === 11000) {
+      errorMessage = 'Duplicate key error';
+      statusCode = 409;
+      errorDetails = error.keyValue;
+    } else if (error.message && error.message.includes('ENOENT')) {
+      errorMessage = 'File system error: Directory not found';
+      statusCode = 500;
+      errorDetails = { path: error.path };
+    } else if (error.message && error.message.includes('EACCES')) {
+      errorMessage = 'File system error: Permission denied';
+      statusCode = 500;
+      errorDetails = { path: error.path };
+    }
+    
+    res.status(statusCode).json({ 
+      message: errorMessage, 
+      error: error.message,
+      details: errorDetails || error.code || null
+    });
   }
 });
 
 // Update a note
-router.put('/:id', authenticateToken, upload.array('attachments', 5), async (req, res) => {
+router.put('/:id', authenticateToken, upload.array('attachments', 5), handleMulterError, async (req, res) => {
   try {
     const { 
       title, 
@@ -262,7 +357,7 @@ router.put('/:id', authenticateToken, upload.array('attachments', 5), async (req
     }
     
     // Access control
-    if (req.user.role === 'doctor' && note.doctor.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'doctor' && note.doctor.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: 'Not authorized to update this note' });
     }
     
@@ -361,7 +456,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
     
     // Access control
-    if (req.user.role === 'doctor' && note.doctor.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'doctor' && note.doctor.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: 'Not authorized to delete this note' });
     }
     
@@ -396,7 +491,7 @@ router.get('/patient/:patientId', authenticateToken, async (req, res) => {
     
     // Access control
     if (req.user.role === 'doctor') {
-      query.doctor = req.user._id;
+      query.doctor = req.user.id;
     }
     
     const notes = await Note.find(query)
@@ -602,7 +697,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
       noteType,
       colorCode: '#FFFFFF', // Default white
       patient: patientId,
-      doctor: req.user._id,
+      doctor: req.user.id,
       visit: visitId || null,
       isAiGenerated: true
     });

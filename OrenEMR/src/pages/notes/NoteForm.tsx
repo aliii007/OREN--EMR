@@ -63,7 +63,7 @@ const NoteForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEditMode = Boolean(id);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [note, setNote] = useState<Note>({
@@ -115,7 +115,9 @@ const NoteForm: React.FC = () => {
       setLoading(true);
       try {
         // Fetch patients
-        const patientsResponse = await axios.get('http://localhost:5000/api/patients?limit=1000');
+        const patientsResponse = await axios.get('http://localhost:5000/api/patients?limit=1000', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         console.log('Patients API response:', patientsResponse.data);
         
         if (patientsResponse.data && Array.isArray(patientsResponse.data.patients)) {
@@ -128,7 +130,9 @@ const NoteForm: React.FC = () => {
         
         // If in edit mode, fetch note data
         if (isEditMode && id) {
-          const noteResponse = await axios.get(`http://localhost:5000/api/notes/${id}`);
+          const noteResponse = await axios.get(`http://localhost:5000/api/notes/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
           const noteData = noteResponse.data;
           
           // Format note data for form
@@ -148,7 +152,9 @@ const NoteForm: React.FC = () => {
           
           // Fetch visits for the selected patient
           if (noteData.patient._id) {
-            const visitsResponse = await axios.get(`http://localhost:5000/api/visits/patient/${noteData.patient._id}`);
+            const visitsResponse = await axios.get(`http://localhost:5000/api/visits/patient/${noteData.patient._id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
             setVisits(visitsResponse.data);
           }
         }
@@ -161,7 +167,7 @@ const NoteForm: React.FC = () => {
     };
     
     fetchData();
-  }, [id, isEditMode]);
+  }, [id, isEditMode, token]);
 
   // Handle patient change and fetch their visits
   const handlePatientChange = async (patientId: string) => {
@@ -169,7 +175,9 @@ const NoteForm: React.FC = () => {
     
     if (patientId) {
       try {
-        const visitsResponse = await axios.get(`http://localhost:5000/api/visits/patient/${patientId}`);
+        const visitsResponse = await axios.get(`http://localhost:5000/api/visits/patient/${patientId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         setVisits(visitsResponse.data);
       } catch (error) {
         console.error('Error fetching patient visits:', error);
@@ -332,6 +340,8 @@ const NoteForm: React.FC = () => {
         visitId: note.visit,
         noteType: note.noteType,
         promptData: promptData
+      }, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       
       if (response.data.success) {
@@ -393,17 +403,30 @@ const NoteForm: React.FC = () => {
       // Add AI generated flag
       formData.append('isAiGenerated', note.isAiGenerated.toString());
       
+      // Ensure we have the token
+      if (!token) {
+        console.error('Authentication token is missing');
+        toast.error('Authentication error. Please log in again.');
+        return;
+      }
+      
       let response;
       if (isEditMode && id) {
         // Update existing note
         response = await axios.put(`http://localhost:5000/api/notes/${id}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: { 
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}` 
+          }
         });
         toast.success('Note updated successfully');
       } else {
         // Create new note
         response = await axios.post('http://localhost:5000/api/notes', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: { 
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}` 
+          }
         });
         toast.success('Note created successfully');
       }
@@ -412,7 +435,23 @@ const NoteForm: React.FC = () => {
       navigate('/notes');
     } catch (error) {
       console.error('Error saving note:', error);
-      toast.error('Failed to save note');
+      // Log more detailed error information
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Error response data:', error.response.data);
+        console.error('Error response status:', error.response.status);
+        console.error('Error response headers:', error.response.headers);
+        toast.error(`Failed to save note: ${error.response.data.message || error.response.status}`);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('Error request:', error.request);
+        toast.error('Failed to save note: No response received from server');
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Error message:', error.message);
+        toast.error(`Failed to save note: ${error.message}`);
+      }
     } finally {
       setSaving(false);
     }

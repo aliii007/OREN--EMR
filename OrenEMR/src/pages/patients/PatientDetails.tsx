@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import BillingList from '../billing/BillingList';
+import PatientNotes from '../../components/patients/PatientNotes';
 import { 
   ArrowLeft, 
   Edit, 
@@ -844,6 +845,16 @@ const PatientDetails: React.FC<{}> = () => {
               Appointments ({appointments.length})
             </button>
             <button
+              onClick={() => setActiveTab('notes')}
+              className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'notes'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Notes
+            </button>
+            <button
               onClick={() => setActiveTab('billing')}
               className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'billing'
@@ -852,13 +863,17 @@ const PatientDetails: React.FC<{}> = () => {
               }`}
             >
               Billing ({invoiceCount})
-
             </button>
           </nav>
         </div>
       </div>
 
       <div ref={printRef}>
+        {activeTab === 'notes' && (
+          <div className="bg-white shadow rounded-lg overflow-hidden p-6">
+            <PatientNotes patientId={id || ''} />
+          </div>
+        )}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Personal Information */}
