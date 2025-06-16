@@ -13,6 +13,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { format, startOfWeek, addDays, isSameDay, parseISO, addWeeks, subWeeks } from 'date-fns';
+import ColorCodedEvent from '../../components/calendar/ColorCodedEvent';
 
 interface Appointment {
   _id: string;
@@ -20,6 +21,7 @@ interface Appointment {
     _id: string;
     firstName: string;
     lastName: string;
+    colorCode?: string;
   };
   doctor: {
     _id: string;
@@ -34,6 +36,7 @@ interface Appointment {
   type: string;
   status: string;
   notes: string;
+  googleCalendarEventId?: string;
 }
 
 const AppointmentCalendar: React.FC = () => {
@@ -168,31 +171,10 @@ const AppointmentCalendar: React.FC = () => {
                     dayAppointments
                       .sort((a, b) => a.time.start.localeCompare(b.time.start))
                       .map(appointment => (
-                        <Link
+                        <ColorCodedEvent
                           key={appointment._id}
-                          to={`/appointments/${appointment._id}/edit`}
-                          className="block p-2 mb-2 rounded-md border border-gray-200 hover:bg-gray-50"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">
-                                {appointment.time.start} - {appointment.time.end}
-                              </p>
-                              <p className="text-sm text-gray-600">
-                                {appointment.patient?.firstName && appointment.patient?.lastName
-  ? `${appointment.patient.firstName} ${appointment.patient.lastName}`
-  : 'Unknown Patient'}
-
-                              </p>
-                              <p className="text-xs text-gray-500 capitalize">
-                                {appointment.type}
-                              </p>
-                            </div>
-                            <span className={`px-2 py-1 text-xs rounded-full ${getAppointmentStatusColor(appointment.status)}`}>
-                              {appointment.status}
-                            </span>
-                          </div>
-                        </Link>
+                          appointment={appointment}
+                        />
                       ))
                   ) : (
                     <p className="text-sm text-gray-500 text-center mt-4">No appointments</p>
@@ -277,42 +259,10 @@ const AppointmentCalendar: React.FC = () => {
                   {slotAppointments.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                       {slotAppointments.map(appointment => (
-                        <Link
+                        <ColorCodedEvent
                           key={appointment._id}
-                          to={`/appointments/${appointment._id}/edit`}
-                          className="block p-3 rounded-md border border-gray-200 hover:bg-gray-50"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center mb-1">
-                                <Clock className="h-4 w-4 text-gray-500 mr-1" />
-                                <p className="text-sm font-medium text-gray-800">
-                                  {appointment.time.start} - {appointment.time.end}
-                                </p>
-                              </div>
-                              <div className="flex items-center mb-1">
-                                <User className="h-4 w-4 text-gray-500 mr-1" />
-                                <p className="text-sm text-gray-700">
-                                  {appointment.patient.firstName} {appointment.patient.lastName}
-                                </p>
-                              </div>
-                              <div className="flex items-center">
-                                <CalendarIcon className="h-4 w-4 text-gray-500 mr-1" />
-                                <p className="text-xs text-gray-600 capitalize">
-                                  {appointment.type}
-                                </p>
-                              </div>
-                            </div>
-                            <span className={`px-2 py-1 text-xs rounded-full ${getAppointmentStatusColor(appointment.status)}`}>
-                              {appointment.status}
-                            </span>
-                          </div>
-                          {appointment.notes && (
-                            <p className="mt-2 text-xs text-gray-500 truncate">
-                              {appointment.notes}
-                            </p>
-                          )}
-                        </Link>
+                          appointment={appointment}
+                        />
                       ))}
                     </div>
                   ) : (

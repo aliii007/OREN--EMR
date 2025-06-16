@@ -14,11 +14,15 @@ import { authenticateToken } from './middleware/authMiddleware.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
+import authUpdateRoutes from './routes/auth-update.js';
 import patientRoutes from './routes/patients.js';
 import appointmentRoutes from './routes/appointments.js';
 import billingRoutes from './routes/billing.js';
 import aiRoutes from './routes/aiRoutes.js';
 import notesRoutes from './routes/notes.js';
+import googleCalendarRoutes from './routes/googleCalendar.js';
+import taskRoutes from './routes/tasks.js';
+import notificationRoutes from './routes/notifications.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -40,11 +44,15 @@ mongoose.connect(process.env.MONGODB_URI)
 
     // Register routes
     app.use('/api/auth', authRoutes);
+    app.use('/api/auth', authUpdateRoutes);
     app.use('/api/patients', authenticateToken, patientRoutes);
     app.use('/api/appointments', authenticateToken, appointmentRoutes);
     app.use('/api/billing', authenticateToken, billingRoutes);
     app.use('/api', aiRoutes);
     app.use('/api/notes', authenticateToken, notesRoutes);
+    app.use('/api/google-calendar', googleCalendarRoutes);
+    app.use('/api/tasks', authenticateToken, taskRoutes);
+    app.use('/api/notifications', authenticateToken, notificationRoutes);
 
     // Health check
     app.get('/api/health', (req, res) => {

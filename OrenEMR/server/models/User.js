@@ -1,4 +1,11 @@
 import mongoose from 'mongoose';
+
+// Schema for Google Calendar authentication
+const googleCalendarSchema = new mongoose.Schema({
+  accessToken: String,
+  refreshToken: String,
+  expiryDate: Number
+}, { _id: false });
 import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
@@ -38,6 +45,7 @@ const userSchema = new mongoose.Schema({
     sparse: true // Only required for doctors
   },
   specialization: String,
+  googleCalendar: googleCalendarSchema, // Google Calendar authentication data
   createdAt: {
     type: Date,
     default: Date.now

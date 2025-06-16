@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import NotificationDropdown from '../notifications/NotificationDropdown';
 import { 
   Home, 
   Users, 
@@ -13,7 +14,8 @@ import {
   User,
   ChevronDown,
   UserPlus,
-  FileText
+  FileText,
+  CheckSquare
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -41,9 +43,11 @@ const MainLayout: React.FC = () => {
     { path: '/patients', name: 'Patients', icon: <Users className="w-5 h-5" /> },
     { path: '/patients/new', name: 'Add Patient', icon: <UserPlus className="w-5 h-5" /> },
     { path: '/notes', name: 'Notes', icon: <FileText className="w-5 h-5" /> },
+    { path: '/tasks', name: 'Tasks', icon: <CheckSquare className="w-5 h-5" /> },
     { path: '/reports/unsettled-cases', name: 'Unsettled Cases', icon: <FileText className="w-5 h-5" /> },
     { path: '/appointments', name: 'Appointments', icon: <Calendar className="w-5 h-5" /> },
     { path: '/billing', name: 'Billing', icon: <DollarSign className="w-5 h-5" /> },
+    { path: '/settings', name: 'Settings', icon: <Settings className="w-5 h-5" /> },
     ...(user?.role === 'admin' ? [{ path: '/admin', name: 'Admin', icon: <Settings className="w-5 h-5" /> }] : [])
   ];
 
@@ -153,35 +157,38 @@ const MainLayout: React.FC = () => {
               {navItems.find(item => location.pathname.startsWith(item.path))?.name || 'Dashboard'}
             </h2>
           </div>
-          <div className="relative">
-            <button
-              onClick={toggleUserMenu}
-              className="flex items-center text-sm text-gray-700 focus:outline-none"
-            >
-              <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-                <User className="w-4 h-4 text-blue-600" />
-              </div>
-              <span className="hidden md:block ml-2">{user?.firstName} {user?.lastName}</span>
-              <ChevronDown className="w-4 h-4 ml-1" />
-            </button>
-            {userMenuOpen && (
-              <div className="absolute right-0 z-10 w-48 mt-2 bg-white rounded-md shadow-lg">
-                <div className="py-1">
-                  <div className="px-4 py-2 text-sm text-gray-700 border-b">
-                    <p className="font-medium">{user?.firstName} {user?.lastName}</p>
-                    <p className="text-xs text-gray-500">{user?.email}</p>
-                    <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Logout
-                  </button>
+          <div className="flex items-center space-x-4">
+            <NotificationDropdown />
+            <div className="relative">
+              <button
+                onClick={toggleUserMenu}
+                className="flex items-center text-sm text-gray-700 focus:outline-none"
+              >
+                <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
+                  <User className="w-4 h-4 text-blue-600" />
                 </div>
-              </div>
-            )}
+                <span className="hidden md:block ml-2">{user?.firstName} {user?.lastName}</span>
+                <ChevronDown className="w-4 h-4 ml-1" />
+              </button>
+              {userMenuOpen && (
+                <div className="absolute right-0 z-10 w-48 mt-2 bg-white rounded-md shadow-lg">
+                  <div className="py-1">
+                    <div className="px-4 py-2 text-sm text-gray-700 border-b">
+                      <p className="font-medium">{user?.firstName} {user?.lastName}</p>
+                      <p className="text-xs text-gray-500">{user?.email}</p>
+                      <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto bg-gray-100 p-4">

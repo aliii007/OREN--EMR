@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { TaskProvider } from './contexts/TaskContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import PrivateRoute from './components/PrivateRoute';
 import DoctorRoute from './components/DoctorRoute';
 import AdminRoute from './components/AdminRoute';
@@ -8,6 +10,7 @@ import MainLayout from './components/layouts/MainLayout';
 // Auth Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import GoogleCalendarCallback from './pages/auth/GoogleCalendarCallback';
 
 // Dashboard
 import Dashboard from './pages/dashboard/Dashboard';
@@ -39,8 +42,19 @@ import BillingList from './pages/billing/BillingList';
 import InvoiceDetails from './pages/billing/InvoiceDetails';
 import InvoiceForm from './pages/billing/InvoiceForm';
 
+// Task Pages
+import TasksPage from './pages/tasks/TasksPage';
+import TaskFormPage from './pages/tasks/TaskFormPage';
+import TaskDetailPage from './pages/tasks/TaskDetailPage';
+
+// Notification Pages
+import NotificationsPage from './pages/notifications/NotificationsPage';
+
 // Report Pages
 import UnsettledCaseReport from './pages/reports/UnsettledCaseReport';
+
+// Settings Page
+import Settings from './pages/settings/Settings';
 
 // Layout Components
 import { ToastContainer } from 'react-toastify';
@@ -54,11 +68,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router>
-          <Routes>
+        <TaskProvider>
+          <NotificationProvider>
+            <Router>
+              <Routes>
             {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/auth/google-calendar/callback" element={<GoogleCalendarCallback />} />
 
             {/* Protected Routes */}
             <Route path="/" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
@@ -76,6 +93,15 @@ function App() {
               <Route path="notes/new" element={<NoteForm />} />
               <Route path="notes/:id/edit" element={<NoteForm />} />
               <Route path="notes/:id/print" element={<NotePrintView />} />
+
+              {/* Task Routes */}
+              <Route path="tasks" element={<TasksPage />} />
+              <Route path="tasks/new" element={<TaskFormPage />} />
+              <Route path="tasks/:id" element={<TaskDetailPage />} />
+              <Route path="tasks/edit/:id" element={<TaskFormPage />} />
+
+              {/* Notification Routes */}
+              <Route path="notifications" element={<NotificationsPage />} />
 
               {/* Appointment Routes */}
               <Route path="appointments" element={<AppointmentCalendar />} />
@@ -99,6 +125,9 @@ function App() {
               {/* Report Routes */}
               <Route path="reports/unsettled-cases" element={<UnsettledCaseReport />} />
 
+              {/* Settings Route */}
+              <Route path="settings" element={<Settings />} />
+
               {/* Admin Routes */}
               <Route path="admin/*" element={<AdminRoute><div>Admin Panel</div></AdminRoute>} />
             </Route>
@@ -106,8 +135,10 @@ function App() {
             {/* Catch-all route */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
-          <ToastContainer position="top-right" autoClose={3000} />
-        </Router>
+              <ToastContainer position="top-right" autoClose={3000} />
+            </Router>
+          </NotificationProvider>
+        </TaskProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

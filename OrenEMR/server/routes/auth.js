@@ -52,7 +52,8 @@ router.post('/register', async (req, res) => {
         email: user.email,
         role: user.role,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        googleCalendar: user.googleCalendar || null
       }
     });
   } catch (error) {
@@ -94,7 +95,8 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        googleCalendar: user.googleCalendar || null
       }
     });
   } catch (error) {
@@ -118,14 +120,20 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
-// Get all doctors (for admin)
+// Get all users
+router.get('/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await User.find().select('-password');
+    res.json(users);
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Get all doctors
 router.get('/doctors', authenticateToken, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
     const doctors = await User.find({ role: 'doctor' }).select('-password');
     res.json(doctors);
   } catch (error) {

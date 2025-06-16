@@ -1,6 +1,12 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 
+interface GoogleCalendar {
+  accessToken?: string;
+  refreshToken?: string;
+  expiryDate?: number;
+}
+
 interface User {
   _id: string;
   username: string;
@@ -8,6 +14,7 @@ interface User {
   role: 'admin' | 'doctor';
   firstName: string;
   lastName: string;
+  googleCalendar?: GoogleCalendar;
 }
 
 interface AuthContextType {
@@ -18,6 +25,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   register: (userData: any) => Promise<void>;
   logout: () => void;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -116,7 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
-        logout
+        logout,
+        setUser
       }}
     >
       {children}

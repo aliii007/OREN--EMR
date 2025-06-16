@@ -36,6 +36,14 @@ const appointmentSchema = new mongoose.Schema({
     default: 'scheduled'
   },
   notes: String,
+  colorCode: {
+    type: String,
+    default: '#ffffff' // Default white color
+  },
+  googleCalendarEventId: {
+    type: String,
+    sparse: true // Allows null/undefined values and creates an index
+  },
   createdAt: {
     type: Date,
     default: Date.now
