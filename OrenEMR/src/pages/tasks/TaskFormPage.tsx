@@ -1,11 +1,58 @@
-import React from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import TaskForm from '../../components/tasks/TaskForm';
 import { FaArrowLeft } from 'react-icons/fa';
+
+// Use lazy loading for the TaskForm component
+const TaskForm = lazy(() => import('../../components/tasks/TaskForm'));
+
+// Skeleton loader component
+const TaskFormSkeleton = () => (
+  <div className="bg-white rounded-lg shadow-md p-6 animate-pulse">
+    <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
+    
+    <div className="space-y-6">
+      {/* Title skeleton */}
+      <div className="space-y-2">
+        <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+        <div className="h-10 bg-gray-200 rounded w-full"></div>
+      </div>
+      
+      {/* Description skeleton */}
+      <div className="space-y-2">
+        <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+        <div className="h-24 bg-gray-200 rounded w-full"></div>
+      </div>
+      
+      {/* Form fields skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+          <div className="h-10 bg-gray-200 rounded w-full"></div>
+        </div>
+        <div className="space-y-2">
+          <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+          <div className="h-10 bg-gray-200 rounded w-full"></div>
+        </div>
+      </div>
+      
+      {/* Buttons skeleton */}
+      <div className="flex justify-end space-x-4 mt-8">
+        <div className="h-10 bg-gray-200 rounded w-24"></div>
+        <div className="h-10 bg-blue-200 rounded w-24"></div>
+      </div>
+    </div>
+  </div>
+);
 
 const TaskFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEditMode = !!id;
+  const [isReady, setIsReady] = useState(false);
+  
+  // Simulate immediate readiness to show skeleton
+  useEffect(() => {
+    setIsReady(true);
+  }, []);
   
   return (
     <div className="container mx-auto px-4 py-6">
@@ -24,7 +71,11 @@ const TaskFormPage: React.FC = () => {
         </h1>
       </div>
       
-      <TaskForm />
+      {isReady && (
+        <Suspense fallback={<TaskFormSkeleton />}>
+          <TaskForm />
+        </Suspense>
+      )}
     </div>
   );
 };

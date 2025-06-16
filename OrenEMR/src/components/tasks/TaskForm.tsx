@@ -46,78 +46,109 @@ const TaskForm: React.FC = () => {
   
   // Fetch users and patients when component mounts
   useEffect(() => {
-    const fetchData = async () => {
+    let isMounted = true;
+    
+    // Set initial loading state only once
+    if (isMounted) {
       setIsLoading(true);
+    }
+    
+    const fetchData = async () => {
       try {
-        // Fetch users
-        const usersResponse = await axios.get('http://localhost:5000/api/auth/users', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
+        // Use Promise.all to fetch data in parallel
+        const [usersResponse, doctorsResponse, patientsResponse] = await Promise.all([
+          axios.get('http://localhost:5000/api/auth/users', {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get('http://localhost:5000/api/auth/doctors', {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get('http://localhost:5000/api/patients', {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
         
-        // Fetch doctors
-        const doctorsResponse = await axios.get('http://localhost:5000/api/auth/doctors', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setDoctors(Array.isArray(doctorsResponse.data) ? doctorsResponse.data : []);
-        
-        // Fetch patients
-        const patientsResponse = await axios.get('http://localhost:5000/api/patients', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const patientsData = Array.isArray(patientsResponse.data) ? patientsResponse.data : [];
-        setPatients(patientsData);
-        setFilteredPatients(patientsData);
-        
-        // If in edit mode, fetch task details
-        if (isEditMode && id) {
-          const task = await getTaskById(id);
-          if (task) {
-            setFormData({
-              title: task.title || '',
-              description: task.description || '',
-              priority: task.priority || 'medium',
-              dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
-              assignedTo: task.assignedTo?._id || '',
-              patient: task.patient?._id || '',
-              relatedVisit: task.relatedVisit || '',
-              relatedNote: task.relatedNote || ''
-            });
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
+          setDoctors(Array.isArray(doctorsResponse.data) ? doctorsResponse.data : []);
+          
+          // Fix: Access the patients array from the response data structure
+          const patientsData = patientsResponse.data && patientsResponse.data.patients ? 
+            patientsResponse.data.patients : [];
+          setPatients(patientsData);
+          setFilteredPatients(patientsData);
+          
+          // If in edit mode, fetch task details
+          if (isEditMode && id) {
+            const task = await getTaskById(id);
+            if (task && isMounted) {
+              setFormData({
+                title: task.title || '',
+                description: task.description || '',
+                priority: task.priority || 'medium',
+                dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+                assignedTo: task.assignedTo?._id || '',
+                patient: task.patient?._id || '',
+                relatedVisit: task.relatedVisit || '',
+                relatedNote: task.relatedNote || ''
+              });
+            }
+          } else {
+            // In create mode, set current user as default assignee
+            setFormData(prev => ({
+              ...prev,
+              assignedTo: user?.id || ''
+            }));
           }
-        } else {
-          // In create mode, set current user as default assignee
-          setFormData(prev => ({
-            ...prev,
-            assignedTo: user?.id || ''
-          }));
         }
       } catch (error) {
         console.error('Error fetching data:', error);
-        toast.error('Failed to load form data. Please check your connection and try again.');
+        if (isMounted) {
+          toast.error('Failed to load form data. Please check your connection and try again.');
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
     
     fetchData();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, [token, id, isEditMode, getTaskById, user]);
   
-  // Filter patients based on search term
+  // Filter patients based on search term - optimize to reduce re-renders
   useEffect(() => {
+    // Skip filtering if patients array is invalid
     if (!Array.isArray(patients)) {
-      setFilteredPatients([]);
       return;
     }
     
-    if (searchTerm.trim() === '') {
+    // Only update filteredPatients if the search term actually changed
+    const trimmedSearchTerm = searchTerm.trim().toLowerCase();
+    
+    // If search is empty, just use the original patients array (no filtering needed)
+    if (trimmedSearchTerm === '') {
       setFilteredPatients(patients);
-    } else {
+      return;
+    }
+    
+    // Debounce the filtering for better performance
+    const timeoutId = setTimeout(() => {
       const filtered = patients.filter(patient => {
         const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
-        return fullName.includes(searchTerm.toLowerCase());
+        return fullName.includes(trimmedSearchTerm);
       });
       setFilteredPatients(filtered);
-    }
+    }, 300); // 300ms debounce
+    
+    // Clean up timeout on component unmount or when dependencies change
+    return () => clearTimeout(timeoutId);
   }, [searchTerm, patients]);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -155,24 +186,36 @@ const TaskForm: React.FC = () => {
     }
   };
   
-  // Render loading state
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-64"><div className="loader"></div></div>;
-  }
+  // Loading state is now handled inside the try block for consistent UI structure
   
   // Add error handling for empty data
   const hasPatients = Array.isArray(filteredPatients) && filteredPatients.length > 0;
   const hasDoctors = Array.isArray(doctors) && doctors.length > 0;
   
+  // Add a CSS class for the loader animation
+  const loaderStyle = {
+    display: 'inline-block',
+    width: '40px',
+    height: '40px',
+    border: '4px solid rgba(0, 0, 0, 0.1)',
+    borderRadius: '50%',
+    borderTopColor: '#3B82F6', // Blue color matching the theme
+    animation: 'spin 1s ease-in-out infinite'
+  };
+  
   // Render with error boundary
   try {
-    // Debug information (can be removed in production)
-    console.log('Rendering TaskForm with:', { 
-      patientsCount: Array.isArray(patients) ? patients.length : 0,
-      filteredPatientsCount: Array.isArray(filteredPatients) ? filteredPatients.length : 0,
-      doctorsCount: Array.isArray(doctors) ? doctors.length : 0,
-      formData
-    });
+    // Show a minimal loading indicator instead of a full-screen loader
+    if (isLoading) {
+      return (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-2xl font-semibold mb-6">{isEditMode ? 'Edit Task' : 'Create New Task'}</h2>
+          <div className="flex justify-center items-center h-64">
+            <div style={loaderStyle}></div>
+          </div>
+        </div>
+      );
+    }
     
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
