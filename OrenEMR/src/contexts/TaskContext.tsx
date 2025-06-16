@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from './AuthContext';
 import { toast } from 'react-toastify';
@@ -72,7 +72,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const { token, user } = useAuth();
 
-  const fetchTasks = async (filters = {}) => {
+  const fetchTasks = useCallback(async (filters = {}) => {
     if (!token) return;
     
     setLoading(true);
@@ -100,9 +100,9 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
-  const fetchMyTasks = async (status?: string) => {
+  const fetchMyTasks = useCallback(async (status?: string) => {
     if (!token) return;
     
     setLoading(true);
@@ -125,9 +125,9 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
-  const getTaskById = async (id: string): Promise<Task | null> => {
+  const getTaskById = useCallback(async (id: string): Promise<Task | null> => {
     if (!token) return null;
     
     setLoading(true);
@@ -150,9 +150,9 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
-  const createTask = async (taskData: Partial<Task>): Promise<Task | null> => {
+  const createTask = useCallback(async (taskData: Partial<Task>): Promise<Task | null> => {
     if (!token) return null;
     
     setLoading(true);
@@ -185,9 +185,9 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, user]);
 
-  const updateTask = async (id: string, taskData: Partial<Task>): Promise<Task | null> => {
+  const updateTask = useCallback(async (id: string, taskData: Partial<Task>): Promise<Task | null> => {
     if (!token) return null;
     
     setLoading(true);
@@ -226,13 +226,13 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
-  const markTaskComplete = async (id: string): Promise<Task | null> => {
+  const markTaskComplete = useCallback(async (id: string): Promise<Task | null> => {
     return updateTask(id, { status: 'completed' });
-  };
+  }, [updateTask]);
 
-  const deleteTask = async (id: string): Promise<boolean> => {
+  const deleteTask = useCallback(async (id: string): Promise<boolean> => {
     if (!token) return false;
     
     setLoading(true);
@@ -260,7 +260,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   // Load tasks when the component mounts and token is available
   useEffect(() => {

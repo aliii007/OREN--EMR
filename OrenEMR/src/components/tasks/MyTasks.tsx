@@ -11,7 +11,7 @@ const MyTasks: React.FC = () => {
   useEffect(() => {
     // Initial fetch of tasks assigned to current user
     fetchMyTasks(statusFilter);
-  }, [fetchMyTasks, statusFilter]);
+  }, [statusFilter]); // Remove fetchMyTasks from dependency array to prevent infinite loop
   
   const handleComplete = async (id: string) => {
     try {

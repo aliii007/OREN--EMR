@@ -164,9 +164,13 @@ const TaskForm: React.FC = () => {
     setIsLoading(true);
     
     try {
+      // Create a copy of the form data
       const taskData = {
         ...formData,
-        dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined
+        dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+        // Set empty strings to undefined for ObjectId fields
+        relatedVisit: formData.relatedVisit || undefined,
+        relatedNote: formData.relatedNote || undefined
       };
       
       if (isEditMode && id) {
@@ -266,7 +270,6 @@ const TaskForm: React.FC = () => {
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
-                <option value="urgent">Urgent</option>
               </select>
             </div>
             

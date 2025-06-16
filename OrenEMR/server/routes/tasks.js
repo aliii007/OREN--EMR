@@ -129,7 +129,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Assigned user not found' });
     }
     
-    // Create new task
+    // Create new task with sanitized data
     const newTask = new Task({
       title,
       description,
@@ -138,8 +138,9 @@ router.post('/', async (req, res) => {
       assignedTo,
       assignedBy: req.user.id,
       patient,
-      relatedVisit,
-      relatedNote
+      // Only include non-empty values for ObjectId fields
+      ...(relatedVisit ? { relatedVisit } : {}),
+      ...(relatedNote ? { relatedNote } : {})
     });
     
     const savedTask = await newTask.save();
@@ -180,7 +181,9 @@ router.put('/:id', async (req, res) => {
       priority, 
       status, 
       dueDate, 
-      assignedTo 
+      assignedTo,
+      relatedVisit,
+      relatedNote
     } = req.body;
     
     const task = await Task.findById(req.params.id);
@@ -213,6 +216,23 @@ router.put('/:id', async (req, res) => {
     if (status) task.status = status;
     if (dueDate) task.dueDate = dueDate;
     if (assignedTo) task.assignedTo = assignedTo;
+    
+    // Handle relatedVisit and relatedNote fields
+    if (relatedVisit === '') {
+      // If empty string, remove the field
+      task.relatedVisit = undefined;
+    } else if (relatedVisit) {
+      // Only update if a non-empty value is provided
+      task.relatedVisit = relatedVisit;
+    }
+    
+    if (relatedNote === '') {
+      // If empty string, remove the field
+      task.relatedNote = undefined;
+    } else if (relatedNote) {
+      // Only update if a non-empty value is provided
+      task.relatedNote = relatedNote;
+    }
     
     // If task is completed, set completedAt timestamp
     if (isCompleted) {

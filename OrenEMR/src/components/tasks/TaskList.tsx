@@ -18,7 +18,7 @@ const TaskList: React.FC = () => {
   useEffect(() => {
     // Initial fetch of tasks
     fetchTasks();
-  }, [fetchTasks]);
+  }, []); // Remove fetchTasks from dependency array to prevent infinite loop
   
   const handleSearch = () => {
     const filters: any = { search: searchTerm };
