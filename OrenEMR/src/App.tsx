@@ -18,6 +18,7 @@ import Dashboard from './pages/dashboard/Dashboard';
 // Patient Pages
 import PatientList from './pages/patients/PatientList';
 import PatientForm from './pages/patients/PatientForm';
+import PatientWizardForm from './pages/patients/PatientWizardForm';
 import PatientDetails from './pages/patients/PatientDetails';
 
 // Notes Pages
@@ -84,7 +85,7 @@ function App() {
 
               {/* Patient Routes */}
               <Route path="patients" element={<PatientList />} />
-              <Route path="patients/new" element={<PatientForm />} />
+              <Route path="patients/new" element={<PatientWizardForm />} />
               <Route path="patients/:id" element={<PatientDetails />} />
               <Route path="patients/:id/edit" element={<PatientForm />} />
 
