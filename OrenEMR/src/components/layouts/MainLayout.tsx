@@ -13,7 +13,6 @@ import {
   X,
   User,
   ChevronDown,
-  UserPlus,
   FileText,
   CheckSquare,
   ClipboardList
@@ -42,7 +41,6 @@ const MainLayout: React.FC = () => {
   const navItems = [
     { path: '/dashboard', name: 'Dashboard', icon: <Home className="w-5 h-5" /> },
     { path: '/patients', name: 'Patients', icon: <Users className="w-5 h-5" /> },
-    { path: '/patients/new', name: 'Add Patient', icon: <UserPlus className="w-5 h-5" /> },
     { path: '/notes', name: 'Notes', icon: <FileText className="w-5 h-5" /> },
     { path: '/tasks', name: 'Tasks', icon: <CheckSquare className="w-5 h-5" /> },
     { path: '/reports/unsettled-cases', name: 'Unsettled Cases', icon: <FileText className="w-5 h-5" /> },

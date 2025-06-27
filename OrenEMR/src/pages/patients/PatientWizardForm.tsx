@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Save, ArrowLeft, ArrowRight } from 'lucide-react';
 import WizardFormStep from '../../components/patients/WizardFormStep';
 import WizardProgressBar from '../../components/patients/WizardProgressBar';
+import SendFormModal, { SendFormData } from '../../components/forms/SendFormModal';
 
 // Interfaces from original PatientForm
 interface Address {
@@ -119,6 +120,7 @@ const PatientWizardForm: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSendFormModal, setShowSendFormModal] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [bodyParts, setBodyParts] = useState<Array<{part: string, side: string}>>([{part: '', side: ''}]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -199,8 +201,8 @@ const PatientWizardForm: React.FC = () => {
     dominantHand: 'right'
   });
 
-  // Define wizard steps
-  const wizardSteps = [
+  // Define wizard steps with translations
+  const wizardStepsEnglish = [
     'Introduction',
     'Referral',
     'Personal Info',
@@ -214,6 +216,24 @@ const PatientWizardForm: React.FC = () => {
     'Communication',
     'Review'
   ];
+
+  const wizardStepsSpanish = [
+    'Introducción',
+    'Referencia',
+    'Información Personal',
+    'Dirección',
+    'Seguro',
+    'Abogado',
+    'Historial Médico',
+    'Detalles de Visita',
+    'Ingesta Subjetiva',
+    'Informes',
+    'Comunicación',
+    'Revisión'
+  ];
+  
+  // Use the appropriate language based on preference
+  const wizardSteps = formData.preferredLanguage === 'spanish' ? wizardStepsSpanish : wizardStepsEnglish;
 
   // Handle body part changes (from original form)
   const handleAddBodyPart = () => {
@@ -759,6 +779,18 @@ const PatientWizardForm: React.FC = () => {
         <h1 className="text-2xl font-semibold text-gray-800">
           {isEditMode ? 'Edit Patient' : 'New Patient Registration'}
         </h1>
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={() => setShowSendFormModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+            </svg>
+            Send to Client
+          </button>
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -766,6 +798,7 @@ const PatientWizardForm: React.FC = () => {
         steps={wizardSteps} 
         currentStep={currentStep} 
         onStepClick={goToStep}
+        language={formData.preferredLanguage}
       />
 
       <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6">
@@ -774,11 +807,15 @@ const PatientWizardForm: React.FC = () => {
           title="Introduction & Language Preference" 
           spanishTitle="Introducción y Preferencia de Idioma"
           isActive={currentStep === 0}
+          language={formData.preferredLanguage}
         >
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Is this form for yourself or someone else?</h3>
-              <p className="text-sm text-gray-500 italic mb-4">¿Es este formulario para usted o para otra persona?</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' 
+                  ? '¿Es este formulario para usted o para otra persona?' 
+                  : 'Is this form for yourself or someone else?'}
+              </h3>
               <div className="flex space-x-4">
                 <label className="flex items-center">
                   <input
@@ -789,7 +826,7 @@ const PatientWizardForm: React.FC = () => {
                     onChange={() => setFormData(prev => ({ ...prev, formType: 'self' }))}
                     className="mr-2"
                   />
-                  <span>For myself / Para mí mismo</span>
+                  <span>{formData.preferredLanguage === 'spanish' ? 'Para mí mismo' : 'For myself'}</span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -800,7 +837,7 @@ const PatientWizardForm: React.FC = () => {
                     onChange={() => setFormData(prev => ({ ...prev, formType: 'other' }))}
                     className="mr-2"
                   />
-                  <span>For someone else / Para otra persona</span>
+                  <span>{formData.preferredLanguage === 'spanish' ? 'Para otra persona' : 'For someone else'}</span>
                 </label>
               </div>
             </div>
@@ -813,6 +850,7 @@ const PatientWizardForm: React.FC = () => {
         title="Introduction & Language Preference" 
         spanishTitle="Introducción y Preferencia de Idioma"
         isActive={currentStep === 0}
+        language={formData.preferredLanguage}
          >
         <div className="mt-8 flex justify-between">
           <button
@@ -825,7 +863,7 @@ const PatientWizardForm: React.FC = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
               </svg>
-              Previous / Anterior
+              {formData.preferredLanguage === 'spanish' ? 'Anterior' : 'Previous'}
             </span>
           </button>
           
@@ -836,7 +874,7 @@ const PatientWizardForm: React.FC = () => {
               className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <span className="flex items-center">
-                Next / Siguiente
+                {formData.preferredLanguage === 'spanish' ? 'Siguiente' : 'Next'}
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
@@ -854,14 +892,14 @@ const PatientWizardForm: React.FC = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Saving...
+                  {formData.preferredLanguage === 'spanish' ? 'Guardando...' : 'Saving...'}
                 </>
               ) : (
                 <>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                  Save Patient / Guardar Paciente
+                  {formData.preferredLanguage === 'spanish' ? 'Guardar Paciente' : 'Save Patient'}
                 </>
               )}
             </button>
@@ -869,12 +907,15 @@ const PatientWizardForm: React.FC = () => {
 
             {formData.formType === 'other' && (
               <div className="p-4 bg-gray-50 rounded-md">
-                <h4 className="font-medium mb-2">Guardian/Legal Representative Information</h4>
-                <p className="text-sm text-gray-500 italic mb-4">Información del Tutor/Representante Legal</p>
+                <h4 className="font-medium mb-2">
+                  {formData.preferredLanguage === 'spanish' 
+                    ? 'Información del Tutor/Representante Legal' 
+                    : 'Guardian/Legal Representative Information'}
+                </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="guardianInfo.name" className="block text-sm font-medium text-gray-700 mb-1">
-                      Name / Nombre
+                      {formData.preferredLanguage === 'spanish' ? 'Nombre' : 'Name'}
                     </label>
                     <input
                       type="text"
@@ -887,7 +928,7 @@ const PatientWizardForm: React.FC = () => {
                   </div>
                   <div>
                     <label htmlFor="guardianInfo.relationship" className="block text-sm font-medium text-gray-700 mb-1">
-                      Relationship / Relación
+                      {formData.preferredLanguage === 'spanish' ? 'Relación' : 'Relationship'}
                     </label>
                     <input
                       type="text"
@@ -903,8 +944,9 @@ const PatientWizardForm: React.FC = () => {
             )}
 
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Preferred Language</h3>
-              <p className="text-sm text-gray-500 italic mb-4">Idioma Preferido</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Idioma Preferido' : 'Preferred Language'}
+              </h3>
               <div className="flex flex-col space-y-2">
                 <label className="flex items-center">
                   <input
@@ -915,7 +957,7 @@ const PatientWizardForm: React.FC = () => {
                     onChange={() => setFormData(prev => ({ ...prev, preferredLanguage: 'english' }))}
                     className="mr-2"
                   />
-                  <span>English / Inglés</span>
+                  <span>{formData.preferredLanguage === 'spanish' ? 'Inglés' : 'English'}</span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -926,7 +968,7 @@ const PatientWizardForm: React.FC = () => {
                     onChange={() => setFormData(prev => ({ ...prev, preferredLanguage: 'spanish' }))}
                     className="mr-2"
                   />
-                  <span>Spanish / Español</span>
+                  <span>{formData.preferredLanguage === 'spanish' ? 'Español' : 'Spanish'}</span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -937,7 +979,7 @@ const PatientWizardForm: React.FC = () => {
                     onChange={() => setFormData(prev => ({ ...prev, preferredLanguage: 'other' }))}
                     className="mr-2"
                   />
-                  <span>Other / Otro</span>
+                  <span>{formData.preferredLanguage === 'spanish' ? 'Otro' : 'Other'}</span>
                 </label>
               </div>
             </div>
@@ -951,7 +993,7 @@ const PatientWizardForm: React.FC = () => {
                   onChange={(e) => setFormData(prev => ({ ...prev, translationHelp: e.target.checked }))}
                   className="mr-2"
                 />
-                <span>I need help with translation / Necesito ayuda con la traducción</span>
+                <span>{formData.preferredLanguage === 'spanish' ? 'Necesito ayuda con la traducción' : 'I need help with translation'}</span>
               </label>
             </div>
           </div>
@@ -961,11 +1003,14 @@ const PatientWizardForm: React.FC = () => {
           title="Medical History" 
           spanishTitle="Historial Médico"
           isActive={currentStep === 6}
+          language={formData.preferredLanguage}
         >
           <div className="space-y-8">
             {/* Allergies */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Allergies / Alergias</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Alergias' : 'Allergies'}
+              </h3>
               <div className="space-y-2">
                 {formData.medicalHistory.allergies.map((allergy, index) => (
                   <div key={`allergy-${index}`} className="flex items-center space-x-2">
@@ -974,7 +1019,7 @@ const PatientWizardForm: React.FC = () => {
                       value={allergy}
                       onChange={(e) => handleArrayChange('allergies', index, e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Allergy / Alergia"
+                      placeholder={formData.preferredLanguage === 'spanish' ? 'Alergia' : 'Allergy'}
                     />
                     <button
                       type="button"
@@ -996,14 +1041,16 @@ const PatientWizardForm: React.FC = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
-                  Add Allergy / Añadir Alergia
+                  {formData.preferredLanguage === 'spanish' ? 'Añadir Alergia' : 'Add Allergy'}
                 </button>
               </div>
             </div>
 
             {/* Medications */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Medications / Medicamentos</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Medicamentos' : 'Medications'}
+              </h3>
               <div className="space-y-2">
                 {formData.medicalHistory.medications.map((medication, index) => (
                   <div key={`medication-${index}`} className="flex items-center space-x-2">
@@ -1012,7 +1059,7 @@ const PatientWizardForm: React.FC = () => {
                       value={medication}
                       onChange={(e) => handleArrayChange('medications', index, e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Medication / Medicamento"
+                      placeholder={formData.preferredLanguage === 'spanish' ? 'Medicamento' : 'Medication'}
                     />
                     <button
                       type="button"
@@ -1034,14 +1081,16 @@ const PatientWizardForm: React.FC = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
-                  Add Medication / Añadir Medicamento
+                  {formData.preferredLanguage === 'spanish' ? 'Añadir Medicamento' : 'Add Medication'}
                 </button>
               </div>
             </div>
 
             {/* Medical Conditions */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Medical Conditions / Condiciones Médicas</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Condiciones Médicas' : 'Medical Conditions'}
+              </h3>
               <div className="space-y-2">
                 {formData.medicalHistory.conditions.map((condition, index) => (
                   <div key={`condition-${index}`} className="flex items-center space-x-2">
@@ -1050,7 +1099,7 @@ const PatientWizardForm: React.FC = () => {
                       value={condition}
                       onChange={(e) => handleArrayChange('conditions', index, e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Condition / Condición"
+                      placeholder={formData.preferredLanguage === 'spanish' ? 'Condición' : 'Condition'}
                     />
                     <button
                       type="button"
@@ -1072,14 +1121,16 @@ const PatientWizardForm: React.FC = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
-                  Add Condition / Añadir Condición
+                  {formData.preferredLanguage === 'spanish' ? 'Añadir Condición' : 'Add Condition'}
                 </button>
               </div>
             </div>
 
             {/* Surgeries */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Surgeries / Cirugías</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Cirugías' : 'Surgeries'}
+              </h3>
               <div className="space-y-2">
                 {formData.medicalHistory.surgeries.map((surgery, index) => (
                   <div key={`surgery-${index}`} className="flex items-center space-x-2">
@@ -1088,7 +1139,7 @@ const PatientWizardForm: React.FC = () => {
                       value={surgery}
                       onChange={(e) => handleArrayChange('surgeries', index, e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Surgery / Cirugía"
+                      placeholder={formData.preferredLanguage === 'spanish' ? 'Cirugía' : 'Surgery'}
                     />
                     <button
                       type="button"
@@ -1110,14 +1161,16 @@ const PatientWizardForm: React.FC = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
-                  Add Surgery / Añadir Cirugía
+                  {formData.preferredLanguage === 'spanish' ? 'Añadir Cirugía' : 'Add Surgery'}
                 </button>
               </div>
             </div>
 
             {/* Family History */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Family History / Historia Familiar</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Historia Familiar' : 'Family History'}
+              </h3>
               <div className="space-y-2">
                 {formData.medicalHistory.familyHistory.map((history, index) => (
                   <div key={`family-history-${index}`} className="flex items-center space-x-2">
@@ -1126,7 +1179,7 @@ const PatientWizardForm: React.FC = () => {
                       value={history}
                       onChange={(e) => handleArrayChange('familyHistory', index, e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Family History / Historia Familiar"
+                      placeholder={formData.preferredLanguage === 'spanish' ? 'Historia Familiar' : 'Family History'}
                     />
                     <button
                       type="button"
@@ -1148,7 +1201,7 @@ const PatientWizardForm: React.FC = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
-                  Add Family History / Añadir Historia Familiar
+                  {formData.preferredLanguage === 'spanish' ? 'Añadir Historia Familiar' : 'Add Family History'}
                 </button>
               </div>
             </div>
@@ -1160,11 +1213,15 @@ const PatientWizardForm: React.FC = () => {
           title="Referral Information" 
           spanishTitle="Información de Referencia"
           isActive={currentStep === 1}
+          language={formData.preferredLanguage}
         >
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Were you referred by a hospital, clinic, or provider?</h3>
-              <p className="text-sm text-gray-500 italic mb-4">¿Fue referido por un hospital, clínica o proveedor?</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' 
+                  ? '¿Fue referido por un hospital, clínica o proveedor?' 
+                  : 'Were you referred by a hospital, clinic, or provider?'}
+              </h3>
               <div className="flex space-x-4">
                 <label className="flex items-center">
                   <input
@@ -1177,7 +1234,7 @@ const PatientWizardForm: React.FC = () => {
                     }))}
                     className="mr-2"
                   />
-                  <span>Yes / Sí</span>
+                  <span>{formData.preferredLanguage === 'spanish' ? 'Sí' : 'Yes'}</span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -1198,7 +1255,7 @@ const PatientWizardForm: React.FC = () => {
             {formData.referralInfo?.isReferred && (
               <div>
                 <label htmlFor="referralInfo.referredBy" className="block text-sm font-medium text-gray-700 mb-1">
-                  Referred by / Referido por
+                  {formData.preferredLanguage === 'spanish' ? 'Referido por' : 'Referred by'}
                 </label>
                 <input
                   type="text"
@@ -1207,7 +1264,7 @@ const PatientWizardForm: React.FC = () => {
                   value={formData.referralInfo?.referredBy || ''}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Hospital, clinic, or provider name / Nombre del hospital, clínica o proveedor"
+                  placeholder={formData.preferredLanguage === 'spanish' ? 'Nombre del hospital, clínica o proveedor' : 'Hospital, clinic, or provider name'}
                 />
               </div>
             )}
@@ -1219,11 +1276,12 @@ const PatientWizardForm: React.FC = () => {
           title="Personal Information" 
           spanishTitle="Información Personal"
           isActive={currentStep === 2}
+          language={formData.preferredLanguage}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                First Name* / Nombre*
+                {formData.preferredLanguage === 'spanish' ? 'Nombre*' : 'First Name*'}
               </label>
               <input
                 type="text"
@@ -1237,7 +1295,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                Last Name* / Apellido*
+                {formData.preferredLanguage === 'spanish' ? 'Apellido*' : 'Last Name*'}
               </label>
               <input
                 type="text"
@@ -1251,7 +1309,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-1">
-                Date of Birth* / Fecha de Nacimiento*
+                {formData.preferredLanguage === 'spanish' ? 'Fecha de Nacimiento*' : 'Date of Birth*'}
               </label>
               <input
                 type="date"
@@ -1265,7 +1323,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
-                Gender* / Género*
+                {formData.preferredLanguage === 'spanish' ? 'Género*' : 'Gender*'}
               </label>
               <select
                 id="gender"
@@ -1274,14 +1332,14 @@ const PatientWizardForm: React.FC = () => {
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
               >
-                <option value="male">Male / Masculino</option>
-                <option value="female">Female / Femenino</option>
-                <option value="other">Other / Otro</option>
+                <option value="male">{formData.preferredLanguage === 'spanish' ? 'Masculino' : 'Male'}</option>
+                <option value="female">{formData.preferredLanguage === 'spanish' ? 'Femenino' : 'Female'}</option>
+                <option value="other">{formData.preferredLanguage === 'spanish' ? 'Otro' : 'Other'}</option>
               </select>
             </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email* / Correo Electrónico*
+                {formData.preferredLanguage === 'spanish' ? 'Correo Electrónico*' : 'Email*'}
               </label>
               <input
                 type="email"
@@ -1295,7 +1353,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                Phone* / Teléfono*
+                {formData.preferredLanguage === 'spanish' ? 'Teléfono*' : 'Phone*'}
               </label>
               <input
                 type="tel"
@@ -1310,7 +1368,7 @@ const PatientWizardForm: React.FC = () => {
             {user?.role === 'admin' && (
               <div>
                 <label htmlFor="assignedDoctor" className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigned Doctor* / Doctor Asignado*
+                  {formData.preferredLanguage === 'spanish' ? 'Doctor Asignado*' : 'Assigned Doctor*'}
                 </label>
                 <select
                   id="assignedDoctor"
@@ -1319,7 +1377,7 @@ const PatientWizardForm: React.FC = () => {
                   onChange={handleChange}
                   className={`w-full px-3 py-2 border ${errors.assignedDoctor ? 'border-red-500' : 'border-gray-300'} rounded-md`}
                 >
-                  <option value="">Select a doctor / Seleccione un doctor</option>
+                  <option value="">{formData.preferredLanguage === 'spanish' ? 'Seleccione un doctor' : 'Select a doctor'}</option>
                   {doctors.map((doctor) => (
                     <option key={doctor._id} value={doctor._id}>
                       Dr. {doctor.firstName} {doctor.lastName}
@@ -1331,7 +1389,7 @@ const PatientWizardForm: React.FC = () => {
             )}
             <div>
               <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-                Status / Estado
+                {formData.preferredLanguage === 'spanish' ? 'Estado' : 'Status'}
               </label>
               <select
                 name="status"
@@ -1339,10 +1397,10 @@ const PatientWizardForm: React.FC = () => {
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
               >
-                <option value="active">Active / Activo</option>
-                <option value="inactive">Inactive / Inactivo</option>
-                <option value="pending">Pending / Pendiente</option>
-                <option value="discharged">Discharged / Dado de alta</option>
+                <option value="active">{formData.preferredLanguage === 'spanish' ? 'Activo' : 'Active'}</option>
+                <option value="inactive">{formData.preferredLanguage === 'spanish' ? 'Inactivo' : 'Inactive'}</option>
+                <option value="pending">{formData.preferredLanguage === 'spanish' ? 'Pendiente' : 'Pending'}</option>
+                <option value="discharged">{formData.preferredLanguage === 'spanish' ? 'Dado de alta' : 'Discharged'}</option>
               </select>
             </div>
           </div>
@@ -1353,11 +1411,12 @@ const PatientWizardForm: React.FC = () => {
           title="Address Information" 
           spanishTitle="Información de Dirección"
           isActive={currentStep === 3}
+          language={formData.preferredLanguage}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
               <label htmlFor="address.street" className="block text-sm font-medium text-gray-700 mb-1">
-                Street Address / Dirección
+                {formData.preferredLanguage === 'spanish' ? 'Dirección' : 'Street Address'}
               </label>
               <input
                 type="text"
@@ -1370,7 +1429,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="address.city" className="block text-sm font-medium text-gray-700 mb-1">
-                City / Ciudad
+                {formData.preferredLanguage === 'spanish' ? 'Ciudad' : 'City'}
               </label>
               <input
                 type="text"
@@ -1383,7 +1442,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="address.state" className="block text-sm font-medium text-gray-700 mb-1">
-                State / Estado
+                {formData.preferredLanguage === 'spanish' ? 'Estado' : 'State'}
               </label>
               <input
                 type="text"
@@ -1396,7 +1455,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="address.zipCode" className="block text-sm font-medium text-gray-700 mb-1">
-                ZIP Code / Código Postal
+                {formData.preferredLanguage === 'spanish' ? 'Código Postal' : 'ZIP Code'}
               </label>
               <input
                 type="text"
@@ -1409,7 +1468,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="address.country" className="block text-sm font-medium text-gray-700 mb-1">
-                Country / País
+                {formData.preferredLanguage === 'spanish' ? 'País' : 'Country'}
               </label>
               <input
                 type="text"
@@ -1428,12 +1487,18 @@ const PatientWizardForm: React.FC = () => {
           title="Insurance & ID Uploads" 
           spanishTitle="Cargas de Seguro e Identificación"
           isActive={currentStep === 4}
+          language={formData.preferredLanguage}
         >
           <div className="space-y-8">
             <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Government ID / Identificación Gubernamental</h3>
-              <p className="text-sm text-gray-500 mb-4">Please upload a photo of your government-issued ID (driver's license, passport, etc.)</p>
-              <p className="text-sm text-gray-500 italic mb-4">Por favor, suba una foto de su identificación emitida por el gobierno (licencia de conducir, pasaporte, etc.)</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Identificación Gubernamental' : 'Government ID'}
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                {formData.preferredLanguage === 'spanish' 
+                  ? 'Por favor, suba una foto de su identificación emitida por el gobierno (licencia de conducir, pasaporte, etc.)' 
+                  : 'Please upload a photo of your government-issued ID (driver\'s license, passport, etc.)'}
+              </p>
               
               <div className="flex items-center justify-center w-full">
                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
@@ -1441,8 +1506,16 @@ const PatientWizardForm: React.FC = () => {
                     <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
                       <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
                     </svg>
-                    <p className="mb-2 text-sm text-gray-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                    <p className="text-xs text-gray-500">PNG, JPG or PDF (MAX. 10MB)</p>
+                    <p className="mb-2 text-sm text-gray-500">
+                      {formData.preferredLanguage === 'spanish' 
+                        ? <><span className="font-semibold">Haga clic para cargar</span> o arrastre y suelte</>
+                        : <><span className="font-semibold">Click to upload</span> or drag and drop</>}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formData.preferredLanguage === 'spanish' 
+                        ? 'PNG, JPG o PDF (MÁX. 10MB)'
+                        : 'PNG, JPG or PDF (MAX. 10MB)'}
+                    </p>
                   </div>
                   <input 
                     type="file" 
@@ -1457,25 +1530,40 @@ const PatientWizardForm: React.FC = () => {
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                  <span>ID uploaded successfully</span>
+                  <span>
+                    {formData.preferredLanguage === 'spanish' 
+                      ? 'Identificación cargada con éxito'
+                      : 'ID uploaded successfully'}
+                  </span>
                 </div>
               )}
             </div>
 
             <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Insurance Card / Tarjeta de Seguro</h3>
-              <p className="text-sm text-gray-500 mb-4">Please upload photos of the front and back of your insurance card</p>
-              <p className="text-sm text-gray-500 italic mb-4">Por favor, suba fotos del frente y reverso de su tarjeta de seguro</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Tarjeta de Seguro' : 'Insurance Card'}
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                {formData.preferredLanguage === 'spanish' 
+                  ? 'Por favor, suba fotos del frente y reverso de su tarjeta de seguro'
+                  : 'Please upload photos of the front and back of your insurance card'}
+              </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Front of Card / Frente de la Tarjeta</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    {formData.preferredLanguage === 'spanish' ? 'Frente de la Tarjeta' : 'Front of Card'}
+                  </p>
                   <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
                         <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
                       </svg>
-                      <p className="text-xs text-gray-500">PNG, JPG or PDF (MAX. 10MB)</p>
+                      <p className="text-xs text-gray-500">
+                      {formData.preferredLanguage === 'spanish' 
+                        ? 'PNG, JPG o PDF (MÁX. 10MB)' 
+                        : 'PNG, JPG or PDF (MAX. 10MB)'}
+                    </p>
                     </div>
                     <input 
                       type="file" 
@@ -1486,13 +1574,19 @@ const PatientWizardForm: React.FC = () => {
                 </div>
                 
                 <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Back of Card / Reverso de la Tarjeta</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    {formData.preferredLanguage === 'spanish' ? 'Reverso de la Tarjeta' : 'Back of Card'}
+                  </p>
                   <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
                         <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
                       </svg>
-                      <p className="text-xs text-gray-500">PNG, JPG or PDF (MAX. 10MB)</p>
+                      <p className="text-xs text-gray-500">
+                        {formData.preferredLanguage === 'spanish' 
+                          ? 'PNG, JPG o PDF (MÁX. 10MB)' 
+                          : 'PNG, JPG or PDF (MAX. 10MB)'}
+                      </p>
                     </div>
                     <input type="file" className="hidden" />
                   </label>
@@ -1504,15 +1598,27 @@ const PatientWizardForm: React.FC = () => {
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                  <span>Insurance card uploaded successfully</span>
+                  <span>
+                    {formData.preferredLanguage === 'spanish' 
+                      ? 'Tarjeta de seguro cargada exitosamente' 
+                      : 'Insurance card uploaded successfully'}
+                  </span>
                 </div>
               )}
             </div>
 
             <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Auto Insurance (Optional) / Seguro de Auto (Opcional)</h3>
-              <p className="text-sm text-gray-500 mb-4">If your visit is related to an auto accident, please upload your auto insurance information</p>
-              <p className="text-sm text-gray-500 italic mb-4">Si su visita está relacionada con un accidente automovilístico, cargue su información de seguro de auto</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' 
+                  ? 'Seguro de Auto (Opcional)' 
+                  : 'Auto Insurance (Optional)'}
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                {formData.preferredLanguage === 'spanish' 
+                  ? 'Si su visita está relacionada con un accidente automovilístico, por favor cargue la información de su seguro de auto' 
+                  : 'If your visit is related to an auto accident, please upload your auto insurance information'}
+              </p>
+
               
               <div className="flex items-center justify-center w-full">
                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
@@ -1520,8 +1626,18 @@ const PatientWizardForm: React.FC = () => {
                     <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
                       <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
                     </svg>
-                    <p className="mb-2 text-sm text-gray-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                    <p className="text-xs text-gray-500">PNG, JPG or PDF (MAX. 10MB)</p>
+                    <p className="mb-2 text-sm text-gray-500">
+                      {formData.preferredLanguage === 'spanish' ? (
+                        <><span className="font-semibold">Haga clic para cargar</span> o arrastre y suelte</>
+                      ) : (
+                        <><span className="font-semibold">Click to upload</span> or drag and drop</>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formData.preferredLanguage === 'spanish' 
+                        ? 'PNG, JPG o PDF (MÁX. 10MB)' 
+                        : 'PNG, JPG or PDF (MAX. 10MB)'}
+                    </p>
                   </div>
                   <input 
                     type="file" 
@@ -1536,7 +1652,11 @@ const PatientWizardForm: React.FC = () => {
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                  <span>Auto insurance uploaded successfully</span>
+                  <span>
+                    {formData.preferredLanguage === 'spanish' 
+                      ? 'Seguro de auto cargado exitosamente' 
+                      : 'Auto insurance uploaded successfully'}
+                  </span>
                 </div>
               )}
             </div>
@@ -1548,11 +1668,12 @@ const PatientWizardForm: React.FC = () => {
           title="Attorney Details" 
           spanishTitle="Detalles del Abogado"
           isActive={currentStep === 5}
+          language={formData.preferredLanguage}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="attorney.name" className="block text-sm font-medium text-gray-700 mb-1">
-                Attorney Name / Nombre del Abogado
+                {formData.preferredLanguage === 'spanish' ? 'Nombre del Abogado' : 'Attorney Name'}
               </label>
               <input
                 type="text"
@@ -1565,7 +1686,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="attorney.firm" className="block text-sm font-medium text-gray-700 mb-1">
-                Firm Name / Nombre de la Firma
+                {formData.preferredLanguage === 'spanish' ? 'Nombre de la Firma' : 'Firm Name'}
               </label>
               <input
                 type="text"
@@ -1578,7 +1699,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="attorney.phone" className="block text-sm font-medium text-gray-700 mb-1">
-                Phone / Teléfono
+                {formData.preferredLanguage === 'spanish' ? 'Teléfono' : 'Phone'}
               </label>
               <input
                 type="tel"
@@ -1591,7 +1712,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="attorney.email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email / Correo Electrónico
+                {formData.preferredLanguage === 'spanish' ? 'Correo Electrónico' : 'Email'}
               </label>
               <input
                 type="email"
@@ -1604,7 +1725,7 @@ const PatientWizardForm: React.FC = () => {
             </div>
             <div>
               <label htmlFor="attorney.caseNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                Case Number / Número de Caso
+                {formData.preferredLanguage === 'spanish' ? 'Número de Caso' : 'Case Number'}
               </label>
               <input
                 type="text"
@@ -1617,12 +1738,14 @@ const PatientWizardForm: React.FC = () => {
             </div>
 
             <div className="md:col-span-2 mt-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Attorney Address / Dirección del Abogado</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {formData.preferredLanguage === 'spanish' ? 'Dirección del Abogado' : 'Attorney Address'}
+              </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div className="md:col-span-2">
                   <label htmlFor="attorney.address.street" className="block text-sm font-medium text-gray-700 mb-1">
-                    Street Address / Dirección
+                    {formData.preferredLanguage === 'spanish' ? 'Dirección' : 'Street Address'}
                   </label>
                   <input
                     type="text"
@@ -1635,7 +1758,7 @@ const PatientWizardForm: React.FC = () => {
                 </div>
                 <div>
                   <label htmlFor="attorney.address.city" className="block text-sm font-medium text-gray-700 mb-1">
-                    City / Ciudad
+                    {formData.preferredLanguage === 'spanish' ? 'Ciudad' : 'City'}
                   </label>
                   <input
                     type="text"
@@ -1648,7 +1771,7 @@ const PatientWizardForm: React.FC = () => {
                 </div>
                 <div>
                   <label htmlFor="attorney.address.state" className="block text-sm font-medium text-gray-700 mb-1">
-                    State / Estado
+                    {formData.preferredLanguage === 'spanish' ? 'Estado' : 'State'}
                   </label>
                   <input
                     type="text"
@@ -1661,7 +1784,7 @@ const PatientWizardForm: React.FC = () => {
                 </div>
                 <div>
                   <label htmlFor="attorney.address.zipCode" className="block text-sm font-medium text-gray-700 mb-1">
-                    ZIP Code / Código Postal
+                    {formData.preferredLanguage === 'spanish' ? 'Código Postal' : 'ZIP Code'}
                   </label>
                   <input
                     type="text"
@@ -1689,7 +1812,7 @@ const PatientWizardForm: React.FC = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
               </svg>
-              Previous / Anterior
+              {formData.preferredLanguage === 'spanish' ? 'Anterior' : 'Previous'}
             </span>
           </button>
           
@@ -1700,7 +1823,7 @@ const PatientWizardForm: React.FC = () => {
               className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <span className="flex items-center">
-                Next / Siguiente
+                {formData.preferredLanguage === 'spanish' ? 'Siguiente' : 'Next'}
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
@@ -1718,14 +1841,14 @@ const PatientWizardForm: React.FC = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Saving...
+                  {formData.preferredLanguage === 'spanish' ? 'Guardando...' : 'Saving...'}
                 </>
               ) : (
                 <>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                  Save Patient / Guardar Paciente
+                  {formData.preferredLanguage === 'spanish' ? 'Guardar Paciente' : 'Save Patient'}
                 </>
               )}
             </button>
@@ -1733,10 +1856,28 @@ const PatientWizardForm: React.FC = () => {
         </div>
       </form>
 
+      {/* Send Form Modal */}
+      <SendFormModal
+        isOpen={showSendFormModal}
+        onClose={() => setShowSendFormModal(false)}
+        onSend={async (data: SendFormData) => {
+          try {
+            await axios.post('/api/patients/send-to-client', {
+              email: data.clientEmail,
+              name: data.clientName,
+              instructions: data.instructions,
+              language: formData.preferredLanguage || 'english'
+            });
+            return Promise.resolve();
+          } catch (error) {
+            console.error('Error sending form link:', error);
+            return Promise.reject(error);
+          }
+        }}
+      />
       </div>
   );
 };
-
 
 export default PatientWizardForm;
 

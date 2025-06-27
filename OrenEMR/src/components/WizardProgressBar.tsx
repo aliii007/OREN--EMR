@@ -5,7 +5,7 @@ interface WizardProgressBarProps {
   totalSteps: number;
   stepTitles?: string[];
   onStepClick?: (step: number) => void;
-}
+  language?: 'english' | 'spanish';
 
 const WizardProgressBar: React.FC<WizardProgressBarProps> = ({
   currentStep,

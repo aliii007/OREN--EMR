@@ -20,6 +20,8 @@ import PatientList from './pages/patients/PatientList';
 import PatientForm from './pages/patients/PatientForm';
 import PatientWizardForm from './pages/patients/PatientWizardForm';
 import PatientDetails from './pages/patients/PatientDetails';
+import PatientFormPublic from './pages/patients/PatientFormPublic';
+import ThankYouPage from './pages/patients/ThankYouPage';
 
 // Notes Pages
 import NotesPage from './pages/notes/NotesPage';
@@ -31,12 +33,6 @@ import AppointmentList from './pages/appointments/AppointmentList';
 import AppointmentForm from './pages/appointments/AppointmentForm';
 import AppointmentDetails from './pages/appointments/AppointmentDetails';
 import AppointmentCalendar from './pages/appointments/AppointmentCalendar';
-
-// Visit Pages
-import InitialVisitForm from './pages/visits/InitialVisitForm';
-import FollowupVisitForm from './pages/visits/FollowupVisitForm';
-import DischargeVisitForm from './pages/visits/DischargeVisitForm';
-import VisitDetails from './pages/visits/VisitDetails';
 
 // Billing Pages
 import BillingList from './pages/billing/BillingList';
@@ -80,6 +76,10 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/auth/google-calendar/callback" element={<GoogleCalendarCallback />} />
+            
+            {/* Public Patient Form Routes */}
+            <Route path="/patients/form/:token" element={<PatientFormPublic />} />
+            <Route path="/patients/thank-you" element={<ThankYouPage />} />
 
             {/* Protected Routes */}
             <Route path="/" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
@@ -113,12 +113,6 @@ function App() {
               <Route path="appointments/new" element={<AppointmentForm />} />
               <Route path="appointments/:id" element={<AppointmentDetails />} />
               <Route path="appointments/:id/edit" element={<AppointmentForm />} />
-
-              {/* Visit Routes */}
-              <Route path="patients/:id/visits/initial" element={<DoctorRoute><InitialVisitForm /></DoctorRoute>} />
-              <Route path="patients/:id/visits/followup" element={<DoctorRoute><FollowupVisitForm /></DoctorRoute>} />
-              <Route path="patients/:id/visits/discharge" element={<DoctorRoute><DischargeVisitForm /></DoctorRoute>} />
-              <Route path="visits/:id" element={<VisitDetails />} />
 
               {/* Billing Routes */}
               <Route path="billing" element={<BillingList />} />

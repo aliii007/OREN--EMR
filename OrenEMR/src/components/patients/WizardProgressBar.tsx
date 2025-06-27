@@ -4,12 +4,14 @@ interface WizardProgressBarProps {
   steps: string[];
   currentStep: number;
   onStepClick?: (stepIndex: number) => void;
+  language?: 'english' | 'spanish';
 }
 
 const WizardProgressBar: React.FC<WizardProgressBarProps> = ({ 
   steps, 
   currentStep,
-  onStepClick 
+  onStepClick,
+  language = 'english'
 }) => {
   const progressPercentage = ((currentStep) / (steps.length - 1)) * 100;
   
@@ -18,10 +20,10 @@ const WizardProgressBar: React.FC<WizardProgressBarProps> = ({
       {/* Progress percentage */}
       <div className="flex justify-between items-center mb-2">
         <span className="text-sm font-medium text-blue-600">
-          Step {currentStep + 1} of {steps.length}
+          {language === 'spanish' ? 'Paso' : 'Step'} {currentStep + 1} {language === 'spanish' ? 'de' : 'of'} {steps.length}
         </span>
         <span className="text-sm font-medium text-gray-500">
-          {Math.round(progressPercentage)}% Complete
+          {Math.round(progressPercentage)}% {language === 'spanish' ? 'Completado' : 'Complete'}
         </span>
       </div>
       
