@@ -57,6 +57,9 @@ import UnsettledCaseReport from './pages/reports/UnsettledCaseReport';
 // Settings Page
 import Settings from './pages/settings/Settings';
 
+// Forms Pages
+import QuestionnairesPage from './pages/forms/QuestionnairesPage';
+
 // Layout Components
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -128,6 +131,9 @@ function App() {
 
               {/* Settings Route */}
               <Route path="settings" element={<Settings />} />
+
+              {/* Forms Routes */}
+              <Route path="forms/questionnaires" element={<QuestionnairesPage />} />
 
               {/* Admin Routes */}
               <Route path="admin/*" element={<AdminRoute><div>Admin Panel</div></AdminRoute>} />
