@@ -299,17 +299,54 @@ const PatientFormPublic: React.FC = () => {
     try {
       setIsSubmitting(true);
       
-      // In a real implementation, you would send the form data to the server
-      // along with the token for validation
-      await axios.post(`/api/patients/form-submission/${token}`, formData);
+      // Send the form data to the server along with the token for validation
+      const response = await axios.post(`/api/patients/form-submission/${token}`, formData);
+      
+      console.log('Form submitted successfully:', response.data);
       
       // Redirect to thank you page
       navigate(`/patients/thank-you?lang=${formData.preferredLanguage}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Form submission error:', error);
-      alert(formData.preferredLanguage === 'spanish'
+      
+      // Provide more specific error messages based on the error response
+      let errorMessage = formData.preferredLanguage === 'spanish'
         ? 'Error al enviar el formulario. Por favor, inténtelo de nuevo.'
-        : 'Error submitting form. Please try again.');
+        : 'Error submitting form. Please try again.';
+      
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        if (error.response.data && error.response.data.message) {
+          errorMessage = error.response.data.message;
+          
+          // Translate common error messages if language is Spanish
+          if (formData.preferredLanguage === 'spanish') {
+            if (errorMessage === 'Invalid or expired token') {
+              errorMessage = 'Token inválido o expirado';
+            } else if (errorMessage === 'This form has already been submitted') {
+              errorMessage = 'Este formulario ya ha sido enviado';
+            } else if (errorMessage.includes('Missing required fields')) {
+              errorMessage = 'Faltan campos obligatorios';
+            }
+          }
+        } else if (error.response.status === 400) {
+          errorMessage = formData.preferredLanguage === 'spanish'
+            ? 'Datos de formulario inválidos. Por favor, verifique la información.'
+            : 'Invalid form data. Please check your information.';
+        } else if (error.response.status === 500) {
+          errorMessage = formData.preferredLanguage === 'spanish'
+            ? 'Error del servidor. Por favor, inténtelo de nuevo más tarde.'
+            : 'Server error. Please try again later.';
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMessage = formData.preferredLanguage === 'spanish'
+          ? 'No se recibió respuesta del servidor. Por favor, verifique su conexión.'
+          : 'No response from server. Please check your connection.';
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

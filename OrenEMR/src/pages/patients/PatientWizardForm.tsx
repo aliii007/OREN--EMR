@@ -1862,16 +1862,53 @@ const PatientWizardForm: React.FC = () => {
         onClose={() => setShowSendFormModal(false)}
         onSend={async (data: SendFormData) => {
           try {
-            await axios.post('/api/patients/send-to-client', {
+            // If we have a patient ID, include it in the request
+            const payload = {
               email: data.clientEmail,
               name: data.clientName,
               instructions: data.instructions,
-              language: formData.preferredLanguage || 'english'
-            });
+              language: formData.preferredLanguage || 'english',
+              patientId: formData._id // Include patient ID if available
+            };
+            
+            console.log('Sending form to client with payload:', payload);
+            const response = await axios.post('/api/patients/send-to-client', payload);
+            
+            // Check if the response contains token and emailSent status
+            if (response.data && response.data.token) {
+              console.log('Form sent successfully with token:', response.data.token);
+              if (response.data.emailSent === false) {
+                throw new Error('Email could not be sent, but form token was created. Please check server logs.');
+              }
+            }
+            
             return Promise.resolve();
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error sending form link:', error);
-            return Promise.reject(error);
+            
+            // Provide more specific error message based on the error
+            let errorMessage = 'Failed to send form to client';
+            
+            if (error.response) {
+              // The request was made and the server responded with a status code
+              // that falls out of the range of 2xx
+              if (error.response.data && error.response.data.message) {
+                errorMessage = error.response.data.message;
+              } else if (error.response.status === 401) {
+                errorMessage = 'Authentication error. Please log in again.';
+              } else if (error.response.status === 403) {
+                errorMessage = 'You do not have permission to send forms.';
+              } else if (error.response.status === 500) {
+                errorMessage = 'Server error. Please try again later.';
+              }
+            } else if (error.request) {
+              // The request was made but no response was received
+              errorMessage = 'No response from server. Please check your connection.';
+            }
+            
+            // Create an error object with the message
+            const enhancedError = new Error(errorMessage);
+            return Promise.reject(enhancedError);
           }
         }}
       />

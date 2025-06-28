@@ -2,7 +2,8 @@ import express from 'express';
 import Patient from '../models/Patient.js';
 import { Visit, InitialVisit, FollowupVisit, DischargeVisit } from '../models/Visit.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
-import Counter from '../models/Counter.js'; // ✅ Import at the top
+import Counter from '../models/Counter.js';
+import FormToken from '../models/FormToken.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 
@@ -275,7 +276,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // Send patient form link to client
 router.post('/send-to-client', authenticateToken, async (req, res) => {
   try {
-    const { email, name, instructions, language = 'english' } = req.body;
+    const { email, name, instructions, language = 'english', patientId } = req.body;
     
     if (!email) {
       return res.status(400).json({ message: 'Email is required' });
@@ -286,21 +287,48 @@ router.post('/send-to-client', authenticateToken, async (req, res) => {
     // Generate a unique token for this form link
     const token = crypto.randomBytes(32).toString('hex');
     
-    // Store the token in the database (you might want to create a FormToken model)
-    // For now, we'll just generate the link
+    // Create a form token record in the database
+    const formToken = new FormToken({
+      token,
+      email,
+      clientName,
+      createdBy: req.user.id,
+      language,
+      status: 'sent',
+      patientId: patientId || null // If we have a patient ID, associate it
+    });
     
-    // Base URL from environment or default
-    const baseUrl = process.env.CLIENT_BASE_URL || 'http://localhost:5173';
+    // Save the form token to the database
+    await formToken.save();
+    
+    // Base URL from environment
+    const baseUrl = process.env.CLIENT_BASE_URL;
+    if (!baseUrl) {
+      return res.status(500).json({ message: 'CLIENT_BASE_URL is not configured in server environment' });
+    }
+    
     const formLink = `${baseUrl}/patients/form/${token}?lang=${language}`;
     
     // Configure mail transporter
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      return res.status(500).json({ message: 'Email configuration is missing in server environment' });
+    }
+    
+    console.log('Email configuration:', { 
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS ? '****' : undefined
+    });
+    
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.EMAIL_USER || 'yourclinicemail@gmail.com',
-        pass: process.env.EMAIL_PASS || 'your-email-password-or-app-password',
-      },
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      }
     });
+    
+    // Log attempt to send email
+    console.log(`Attempting to send email to: ${email} using ${process.env.EMAIL_USER}`);
     
     const subject = language === 'spanish' ? 
       'Complete su formulario médico - The Wellness Studio' : 
@@ -311,7 +339,7 @@ router.post('/send-to-client', authenticateToken, async (req, res) => {
       `Please complete your medical form using the following link: ${formLink}`;
     
     const mailOptions = {
-      from: process.env.EMAIL_USER || 'yourclinicemail@gmail.com',
+      from: process.env.EMAIL_USER,
       to: email,
       subject,
       text,
@@ -345,8 +373,30 @@ router.post('/send-to-client', authenticateToken, async (req, res) => {
       `
     };
     
-    await transporter.sendMail(mailOptions);
-    res.status(200).json({ message: 'Form link sent successfully', formLink });
+    // Send the email with better error handling
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log('Email sent successfully:', info.response);
+      
+      res.status(200).json({ 
+        message: 'Form link sent successfully', 
+        formLink,
+        token,
+        emailSent: true
+      });
+    } catch (emailError) {
+      console.error('Error sending email:', emailError);
+      console.error('Email error details:', JSON.stringify(emailError, null, 2));
+      
+      // Still save the token but inform about email failure
+      res.status(500).json({ 
+        message: 'Form token created but email failed to send', 
+        error: emailError.message,
+        formLink,
+        token,
+        emailSent: false
+      });
+    }
   } catch (error) {
     console.error('Send form link error:', error);
     res.status(500).json({ message: 'Failed to send form link', error: error.message });
@@ -359,8 +409,21 @@ router.post('/form-submission/:token', async (req, res) => {
     const { token } = req.params;
     const patientData = req.body;
     
-    // In a real implementation, you would validate the token here
-    // For example, check if it exists in your database and hasn't expired
+    // Validate the token
+    if (!token) {
+      return res.status(400).json({ message: 'Invalid or missing token' });
+    }
+    
+    // Find the form token in the database
+    const formToken = await FormToken.findOne({ token });
+    if (!formToken) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+    
+    // Check if the token has already been used
+    if (formToken.status === 'completed') {
+      return res.status(400).json({ message: 'This form has already been submitted' });
+    }
     
     // Generate a case number if attorney info is present
     if (patientData.attorney && patientData.attorney.name) {
@@ -374,18 +437,87 @@ router.post('/form-submission/:token', async (req, res) => {
       patientData.attorney.caseNumber = formattedCaseNumber;
     }
     
+    // Ensure required fields are present
+    if (!patientData.firstName || !patientData.lastName || !patientData.email) {
+      return res.status(400).json({ 
+        message: 'Missing required fields', 
+        requiredFields: ['firstName', 'lastName', 'email']
+      });
+    }
+    
     // Create and save patient
     const patient = new Patient({
       ...patientData,
       subjective: patientData.subjective || {},
       createdVia: 'public_form',
-      formToken: token
+      formToken: token,
+      status: 'pending', // Set initial status to pending for review
+      submittedAt: new Date()
     });
     
     await patient.save();
     
+    // Update the form token status to completed
+    formToken.status = 'completed';
+    formToken.completedAt = new Date();
+    formToken.patientId = patient._id;
+    await formToken.save();
+    
     // Send notification to admin/staff about new patient submission
     // This would be implemented in a real system
+    // For now, we'll just log it
+    console.log(`New patient submission received: ${patient.firstName} ${patient.lastName}`);
+    
+    // Send confirmation email to the patient
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      try {
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+        
+        const language = patientData.preferredLanguage || formToken.language || 'english';
+        
+        const subject = language === 'spanish' ? 
+          'Formulario recibido - The Wellness Studio' : 
+          'Form Received - The Wellness Studio';
+          
+        const text = language === 'spanish' ? 
+          `Gracias por enviar su formulario. Nos pondremos en contacto con usted pronto.` : 
+          `Thank you for submitting your form. We will be in touch with you soon.`;
+        
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: patient.email,
+          subject,
+          text,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px;">
+              <h2 style="color: #333;">${language === 'spanish' ? 'Formulario Recibido' : 'Form Received'}</h2>
+              <p style="color: #666; line-height: 1.5;">
+                ${language === 'spanish' ? 
+                  `Hola ${patient.firstName},<br><br>Gracias por enviar su formulario. Hemos recibido su información y nos pondremos en contacto con usted pronto.` : 
+                  `Hello ${patient.firstName},<br><br>Thank you for submitting your form. We have received your information and will be in touch with you soon.`}
+              </p>
+              <p style="color: #666; line-height: 1.5;">
+                ${language === 'spanish' ? 
+                  'Si tiene alguna pregunta, no dude en contactarnos.' : 
+                  'If you have any questions, please don\'t hesitate to contact us.'}
+              </p>
+            </div>
+          `
+        };
+        
+        await transporter.sendMail(mailOptions);
+        console.log(`Confirmation email sent to ${patient.email}`);
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+        // Don't fail the request if email sending fails
+      }
+    }
     
     res.status(201).json({
       message: 'Patient information submitted successfully',

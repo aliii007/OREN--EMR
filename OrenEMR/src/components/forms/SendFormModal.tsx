@@ -36,9 +36,24 @@ const SendFormModal: React.FC<SendFormModalProps> = ({ isOpen, onClose, onSend }
       await onSend(formData);
       toast.success('Form sent successfully to client');
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending form:', error);
-      toast.error('Failed to send form to client');
+      
+      // Extract the most useful error message
+      let errorMessage = 'Failed to send form to client';
+      
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Error response data:', error.response.data);
+        errorMessage = error.response.data.message || errorMessage;
+      } else if (error.message) {
+        // The request was made but no response was received or
+        // something happened in setting up the request that triggered an Error
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsSending(false);
     }
