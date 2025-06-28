@@ -6,6 +6,15 @@ import Counter from '../models/Counter.js';
 import FormToken from '../models/FormToken.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import sgMail from '@sendgrid/mail';
+
+// Set SendGrid API key if available
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log('SendGrid API key configured');
+} else {
+  console.warn('SendGrid API key not found in environment variables');
+}
 
 const router = express.Router();
 
@@ -309,26 +318,19 @@ router.post('/send-to-client', authenticateToken, async (req, res) => {
     
     const formLink = `${baseUrl}/patients/form/${token}?lang=${language}`;
     
-    // Configure mail transporter
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      return res.status(500).json({ message: 'Email configuration is missing in server environment' });
+    // Configure SendGrid for email sending
+    if (!process.env.SENDGRID_API_KEY) {
+      return res.status(500).json({ message: 'SendGrid API key is missing in server environment' });
     }
     
-    console.log('Email configuration:', { 
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS ? '****' : undefined
-    });
-    
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      }
-    });
-    
     // Log attempt to send email
-    console.log(`Attempting to send email to: ${email} using ${process.env.EMAIL_USER}`);
+    console.log(`Attempting to send email to: ${email} using SendGrid`);
+    console.log('Make sure your SendGrid API key is valid and has the necessary permissions');
+    
+    // Verify sender email is configured
+    if (!process.env.EMAIL_FROM) {
+      return res.status(500).json({ message: 'Sender email (EMAIL_FROM) is not configured in server environment' });
+    }
     
     const subject = language === 'spanish' ? 
       'Complete su formulario médico - The Wellness Studio' : 
@@ -338,45 +340,49 @@ router.post('/send-to-client', authenticateToken, async (req, res) => {
       `Por favor complete su formulario médico utilizando el siguiente enlace: ${formLink}` : 
       `Please complete your medical form using the following link: ${formLink}`;
     
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
+    // Create HTML content for the email
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px;">
+        <h2 style="color: #333;">${language === 'spanish' ? 'Complete su formulario médico' : 'Complete Your Medical Form'}</h2>
+        <p style="color: #666; line-height: 1.5;">
+          ${language === 'spanish' ? 
+            `Hola ${clientName},<br><br>Por favor haga clic en el enlace a continuación para completar su formulario médico:` : 
+            `Hello ${clientName},<br><br>Please click the link below to complete your medical form:`}
+        </p>
+        ${instructions ? `
+        <p style="color: #666; line-height: 1.5; background-color: #f9f9f9; padding: 10px; border-left: 4px solid #4a90e2;">
+          <strong>${language === 'spanish' ? 'Instrucciones especiales:' : 'Special instructions:'}</strong><br>
+          ${instructions}
+        </p>
+        ` : ''}
+        <p style="margin: 25px 0;">
+          <a href="${formLink}" style="background-color: #4a90e2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            ${language === 'spanish' ? 'Completar Formulario' : 'Complete Form'}
+          </a>
+        </p>
+        <p style="color: #999; font-size: 0.9em;">
+          ${language === 'spanish' ? 
+            'Si tiene problemas con el enlace, puede copiar y pegar esta URL en su navegador:' : 
+            'If you have trouble with the link, you can copy and paste this URL into your browser:'}
+          <br>
+          <span style="color: #4a90e2;">${formLink}</span>
+        </p>
+      </div>
+    `;
+    
+    // Create email message for SendGrid
+    const msg = {
       to: email,
-      subject,
-      text,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px;">
-          <h2 style="color: #333;">${language === 'spanish' ? 'Complete su formulario médico' : 'Complete Your Medical Form'}</h2>
-          <p style="color: #666; line-height: 1.5;">
-            ${language === 'spanish' ? 
-              `Hola ${clientName},<br><br>Por favor haga clic en el enlace a continuación para completar su formulario médico:` : 
-              `Hello ${clientName},<br><br>Please click the link below to complete your medical form:`}
-          </p>
-          ${instructions ? `
-          <p style="color: #666; line-height: 1.5; background-color: #f9f9f9; padding: 10px; border-left: 4px solid #4a90e2;">
-            <strong>${language === 'spanish' ? 'Instrucciones especiales:' : 'Special instructions:'}</strong><br>
-            ${instructions}
-          </p>
-          ` : ''}
-          <p style="margin: 25px 0;">
-            <a href="${formLink}" style="background-color: #4a90e2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">
-              ${language === 'spanish' ? 'Completar Formulario' : 'Complete Form'}
-            </a>
-          </p>
-          <p style="color: #999; font-size: 0.9em;">
-            ${language === 'spanish' ? 
-              'Si tiene problemas con el enlace, puede copiar y pegar esta URL en su navegador:' : 
-              'If you have trouble with the link, you can copy and paste this URL into your browser:'}
-            <br>
-            <span style="color: #4a90e2;">${formLink}</span>
-          </p>
-        </div>
-      `
+      from: process.env.EMAIL_FROM, // Verified sender in SendGrid
+      subject: subject,
+      text: text,
+      html: htmlContent,
     };
     
     // Send the email with better error handling
     try {
-      const info = await transporter.sendMail(mailOptions);
-      console.log('Email sent successfully:', info.response);
+      const response = await sgMail.send(msg);
+      console.log('Email sent successfully with SendGrid:', response);
       
       res.status(200).json({ 
         message: 'Form link sent successfully', 
@@ -385,8 +391,10 @@ router.post('/send-to-client', authenticateToken, async (req, res) => {
         emailSent: true
       });
     } catch (emailError) {
-      console.error('Error sending email:', emailError);
-      console.error('Email error details:', JSON.stringify(emailError, null, 2));
+      console.error('Error sending email with SendGrid:', emailError);
+      if (emailError.response) {
+        console.error('SendGrid API error details:', emailError.response.body);
+      }
       
       // Still save the token but inform about email failure
       res.status(500).json({ 
@@ -469,16 +477,8 @@ router.post('/form-submission/:token', async (req, res) => {
     console.log(`New patient submission received: ${patient.firstName} ${patient.lastName}`);
     
     // Send confirmation email to the patient
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    if (process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM) {
       try {
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-          },
-        });
-        
         const language = patientData.preferredLanguage || formToken.language || 'english';
         
         const subject = language === 'spanish' ? 
@@ -489,30 +489,32 @@ router.post('/form-submission/:token', async (req, res) => {
           `Gracias por enviar su formulario. Nos pondremos en contacto con usted pronto.` : 
           `Thank you for submitting your form. We will be in touch with you soon.`;
         
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px;">
+            <h2 style="color: #333;">${language === 'spanish' ? 'Formulario Recibido' : 'Form Received'}</h2>
+            <p style="color: #666; line-height: 1.5;">
+              ${language === 'spanish' ? 
+                `Hola ${patient.firstName},<br><br>Gracias por enviar su formulario. Hemos recibido su información y nos pondremos en contacto con usted pronto.` : 
+                `Hello ${patient.firstName},<br><br>Thank you for submitting your form. We have received your information and will be in touch with you soon.`}
+            </p>
+            <p style="color: #666; line-height: 1.5;">
+              ${language === 'spanish' ? 
+                'Si tiene alguna pregunta, no dude en contactarnos.' : 
+                'If you have any questions, please don\'t hesitate to contact us.'}
+            </p>
+          </div>
+        `;
+        
+        const msg = {
           to: patient.email,
-          subject,
-          text,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px;">
-              <h2 style="color: #333;">${language === 'spanish' ? 'Formulario Recibido' : 'Form Received'}</h2>
-              <p style="color: #666; line-height: 1.5;">
-                ${language === 'spanish' ? 
-                  `Hola ${patient.firstName},<br><br>Gracias por enviar su formulario. Hemos recibido su información y nos pondremos en contacto con usted pronto.` : 
-                  `Hello ${patient.firstName},<br><br>Thank you for submitting your form. We have received your information and will be in touch with you soon.`}
-              </p>
-              <p style="color: #666; line-height: 1.5;">
-                ${language === 'spanish' ? 
-                  'Si tiene alguna pregunta, no dude en contactarnos.' : 
-                  'If you have any questions, please don\'t hesitate to contact us.'}
-              </p>
-            </div>
-          `
+          from: process.env.EMAIL_FROM,
+          subject: subject,
+          text: text,
+          html: htmlContent,
         };
         
-        await transporter.sendMail(mailOptions);
-        console.log(`Confirmation email sent to ${patient.email}`);
+        const response = await sgMail.send(msg);
+        console.log(`Confirmation email sent to ${patient.email} using SendGrid`);
       } catch (emailError) {
         console.error('Error sending confirmation email:', emailError);
         // Don't fail the request if email sending fails
