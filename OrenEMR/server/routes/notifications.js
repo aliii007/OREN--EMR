@@ -6,7 +6,7 @@ import Notification from '../models/Notification.js';
 const router = express.Router();
 
 // Get all notifications for the current user
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { isRead, isDismissed, type, limit = 50 } = req.query;
@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
 });
 
 // Mark notification as read
-router.put('/:id/read', async (req, res) => {
+router.put('/:id/read', authenticateToken, async (req, res) => {
   try {
     const notificationId = req.params.id;
     const userId = req.user.id;
@@ -81,7 +81,7 @@ router.put('/:id/read', async (req, res) => {
 });
 
 // Mark notification as dismissed
-router.put('/:id/dismiss', async (req, res) => {
+router.put('/:id/dismiss', authenticateToken, async (req, res) => {
   try {
     const notificationId = req.params.id;
     const userId = req.user.id;
@@ -108,7 +108,7 @@ router.put('/:id/dismiss', async (req, res) => {
 });
 
 // Mark all notifications as read
-router.put('/mark-all-read', async (req, res) => {
+router.put('/mark-all-read', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { type } = req.query;
@@ -139,7 +139,7 @@ router.put('/mark-all-read', async (req, res) => {
 });
 
 // Delete a notification
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const notificationId = req.params.id;
     const userId = req.user.id;

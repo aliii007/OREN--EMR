@@ -8,7 +8,7 @@ import User from '../models/User.js';
 const router = express.Router();
 
 // Get all tasks (with filtering options)
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { 
       status, 
@@ -63,7 +63,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get tasks assigned to the current user
-router.get('/my-tasks', async (req, res) => {
+router.get('/my-tasks', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { status } = req.query;
@@ -84,7 +84,7 @@ router.get('/my-tasks', async (req, res) => {
 });
 
 // Get a specific task by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const task = await Task.findById(req.params.id)
       .populate('assignedTo', 'firstName lastName username')
@@ -105,7 +105,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create a new task
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { 
       title, 
@@ -173,7 +173,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update a task
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { 
       title, 
@@ -288,7 +288,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete a task
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
     

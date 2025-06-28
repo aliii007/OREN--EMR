@@ -3,6 +3,7 @@ import multer from 'multer';
 import nodemailer from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Upload PDF Endpoint
-router.post('/upload', upload.single('file'), (req, res) => {
+router.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     res.status(200).json({ message: 'File uploaded successfully' });
@@ -30,7 +31,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
 });
 
 // Email PDF Endpoint
-router.post('/email', async (req, res) => {
+router.post('/email', authenticateToken, async (req, res) => {
   const { email, fileName } = req.body;
   const filePath = path.join('uploads/reports', fileName);
 

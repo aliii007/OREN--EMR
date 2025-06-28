@@ -6,8 +6,8 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables from .env file in the project root
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// Load environment variables from .env file in the server directory
+dotenv.config({ path: path.resolve(__dirname, './.env') });
 
 import reportsRoutes from './routes/reports.js';
 console.log('Loaded MONGODB_URI:', process.env.MONGODB_URI);
@@ -65,22 +65,22 @@ mongoose.connect(process.env.MONGODB_URI)
 // Register routes
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', authUpdateRoutes);
-app.use('/api/patients', patientRoutes); // Removed authenticateToken for testing
-app.use('/api/appointments', appointmentRoutes); // Removed authenticateToken for testing
-app.use('/api/billing', billingRoutes); // Removed authenticateToken for testing
-app.use('/api', aiRoutes);
-app.use('/api/notes', notesRoutes); // Removed authenticateToken for testing
-app.use('/api/google-calendar', googleCalendarRoutes); // Removed authenticateToken for testing
-app.use('/api/tasks', taskRoutes); // Removed authenticateToken for testing
-app.use('/api/notifications', notificationRoutes); // Removed authenticateToken for testing
+app.use('/api/patients', authenticateToken, patientRoutes);
+app.use('/api/appointments', authenticateToken, appointmentRoutes);
+app.use('/api/billing', authenticateToken, billingRoutes);
+app.use('/api', authenticateToken, aiRoutes);
+app.use('/api/notes', authenticateToken, notesRoutes);
+app.use('/api/google-calendar', authenticateToken, googleCalendarRoutes);
+app.use('/api/tasks', authenticateToken, taskRoutes);
+app.use('/api/notifications', authenticateToken, notificationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'Server is running' });
 });
 
-app.use('/api/reports', reportsRoutes); // Already updated above
-app.use('/api/visits', visitRoutes); // Removed authenticateToken for testing
+app.use('/api/reports', authenticateToken, reportsRoutes);
+app.use('/api/visits', authenticateToken, visitRoutes);
 // Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);

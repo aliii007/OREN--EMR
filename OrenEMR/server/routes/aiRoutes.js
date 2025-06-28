@@ -1,6 +1,7 @@
 import express from 'express';
 const router = express.Router();
 import { OpenAI } from 'openai';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 // Initialize OpenAI client with OpenRouter configuration
 const client = new OpenAI({
@@ -9,7 +10,7 @@ const client = new OpenAI({
 });
 
 // POST endpoint to generate narrative text from form data using AI
-router.post('/generate-narrative', async (req, res) => {
+router.post('/generate-narrative', authenticateToken, async (req, res) => {
   const formData = req.body; // Get form data from the request body
 
   // Construct a detailed prompt for the AI based on formData
