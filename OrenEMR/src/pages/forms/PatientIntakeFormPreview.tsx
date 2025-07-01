@@ -55,6 +55,7 @@ const PatientIntakeFormPreview: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [responses, setResponses] = useState<Record<string, any>>({});
+  const [language, setLanguage] = useState<string>('english');
   
   useEffect(() => {
     if (id) {
@@ -79,6 +80,10 @@ const PatientIntakeFormPreview: React.FC = () => {
       ...prev,
       [questionId]: value
     }));
+  };
+
+  const handleLanguageChange = (lang: string) => {
+    setLanguage(lang);
   };
   
   const handleNext = () => {
@@ -134,8 +139,33 @@ const PatientIntakeFormPreview: React.FC = () => {
     );
   }
   
-  const currentQuestion = formTemplate.items[currentStep];
-  const progress = ((currentStep + 1) / formTemplate.items.length) * 100;
+  // Filter questions based on language preference
+  const filteredItems = formTemplate.items.filter(item => {
+    // For language selection question, always show
+    if (item.questionText.includes('Language Preference')) {
+      return true;
+    }
+    
+    // For English language, show English questions (those without Spanish text)
+    if (language === 'english') {
+      return !item.questionText.includes('¿') && !item.questionText.includes('español');
+    }
+    
+    // For Spanish language, show Spanish questions
+    if (language === 'spanish') {
+      return item.questionText.includes('¿') || item.questionText.includes('español');
+    }
+    
+    return true;
+  });
+  
+  // If we're on the first question (language preference), show it
+  // Otherwise, show the filtered question based on the current step
+  const currentQuestion = currentStep === 0 
+    ? formTemplate.items[0] 
+    : filteredItems[currentStep];
+  
+  const progress = ((currentStep + 1) / filteredItems.length) * 100;
   
   return (
     <div className="min-h-screen bg-gray-100 py-8">
@@ -150,7 +180,7 @@ const PatientIntakeFormPreview: React.FC = () => {
         
         <div className="p-6">
           <div className="text-sm text-gray-500 mb-2">
-            {currentStep + 1} / {formTemplate.items.length}
+            {currentStep + 1} / {filteredItems.length}
           </div>
           
           <div className="mb-8">
@@ -306,6 +336,34 @@ const PatientIntakeFormPreview: React.FC = () => {
                 )}
               </div>
             )}
+
+            {/* Special handling for language preference question */}
+            {currentStep === 0 && currentQuestion.questionText.includes('Language Preference') && (
+              <div className="space-y-4 mt-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="english"
+                    name="language"
+                    checked={language === 'english'}
+                    onChange={() => handleLanguageChange('english')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="english" className="text-gray-700">I am able to complete this form in English</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="spanish"
+                    name="language"
+                    checked={language === 'spanish'}
+                    onChange={() => handleLanguageChange('spanish')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="spanish" className="text-gray-700">Mejor puedo responder este formulario en español</label>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="flex justify-between">
@@ -318,7 +376,7 @@ const PatientIntakeFormPreview: React.FC = () => {
               Previous
             </button>
             
-            {currentStep < formTemplate.items.length - 1 ? (
+            {currentStep < filteredItems.length - 1 ? (
               <button
                 onClick={handleNext}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center"
