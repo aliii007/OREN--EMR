@@ -58,6 +58,8 @@ import QuestionnairesPage from './pages/forms/QuestionnairesPage';
 import FormTemplateList from './pages/forms/FormTemplateList';
 import FormTemplateBuilder from './pages/forms/FormTemplateBuilder';
 import PatientIntakeFormPage from './pages/forms/PatientIntakeFormPage';
+import PatientIntakeFormBuilder from './pages/forms/PatientIntakeFormBuilder';
+import PatientIntakeFormPreview from './pages/forms/PatientIntakeFormPreview';
 
 // Layout Components
 import { ToastContainer } from 'react-toastify';
@@ -135,6 +137,8 @@ function App() {
               <Route path="forms/templates/new" element={<FormTemplateBuilder />} />
               <Route path="forms/templates/:id" element={<PatientIntakeFormPage />} />
               <Route path="forms/templates/:id/edit" element={<FormTemplateBuilder />} />
+              <Route path="forms/templates/:id/builder" element={<PatientIntakeFormBuilder />} />
+              <Route path="forms/templates/:id/preview" element={<PatientIntakeFormPreview />} />
 
               {/* Admin Routes */}
               <Route path="admin/*" element={<AdminRoute><div>Admin Panel</div></AdminRoute>} />

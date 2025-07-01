@@ -43,6 +43,21 @@ const QuestionnairesPage: React.FC = () => {
     }
   };
   
+  // Convert form templates to the format expected by QuestionnairesSection
+  const mapTemplateToForm = (template: FormTemplate) => {
+    // Generate a color based on the template ID for visual variety
+    const colors = ['bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500'];
+    const colorIndex = template._id.charCodeAt(0) % colors.length;
+    
+    return {
+      id: template._id,
+      title: template.title,
+      color: colors[colorIndex],
+      isShared: template.isPublic,
+      isPdf: false
+    };
+  };
+  
   // Sample data for questionnaires
   const questionnaires = [
     {
@@ -150,13 +165,15 @@ const QuestionnairesPage: React.FC = () => {
       if (newPatientTemplate) {
         navigate(`/forms/templates/${newPatientTemplate._id}`);
       } else {
-        // If no template is found, navigate to the form templates page
-        navigate('/forms/templates');
-        toast.info('Please create a new patient intake form template first');
+        // If no template is found, navigate to the form builder to create one
+        navigate('/forms/templates/new?newPatient=true');
       }
+    } else if (formId.length === 24) {
+      // This is likely a MongoDB ObjectId, so navigate to the form template
+      navigate(`/forms/templates/${formId}`);
     } else {
       // For other forms, we'll implement this later
-      // navigate(`/forms/${formId}`);
+      toast.info('This form is not yet implemented');
     }
   };
 
@@ -178,6 +195,15 @@ const QuestionnairesPage: React.FC = () => {
         </div>
       ) : (
         <>
+          {/* Custom Forms Section */}
+          <QuestionnairesSection
+            title="Custom Forms"
+            forms={formTemplates.map(mapTemplateToForm)}
+            onFormClick={handleFormClick}
+            onCreateNew={handleCreateNew}
+            onUploadExisting={handleUploadExisting}
+          />
+          
           {/* Questionnaires Section */}
           <QuestionnairesSection
             title="Questionnaires"

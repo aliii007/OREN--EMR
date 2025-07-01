@@ -7,6 +7,7 @@ interface SendFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSend: (data: SendFormData) => Promise<void>;
+  formId?: string;
 }
 
 export interface SendFormData {
@@ -15,7 +16,7 @@ export interface SendFormData {
   instructions?: string;
 }
 
-const SendFormModal: React.FC<SendFormModalProps> = ({ isOpen, onClose, onSend }) => {
+const SendFormModal: React.FC<SendFormModalProps> = ({ isOpen, onClose, onSend, formId }) => {
   const [formData, setFormData] = useState<SendFormData>({
     clientName: '',
     clientEmail: '',
