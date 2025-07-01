@@ -1,9 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import QuestionnairesSection from '../../components/forms/QuestionnairesSection';
+import axios from 'axios';
+import { toast } from 'react-toastify';
+
+interface FormTemplate {
+  _id: string;
+  title: string;
+  description: string;
+  isActive: boolean;
+  isPublic: boolean;
+  language: string;
+  items: any[];
+  createdBy: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
 
 const QuestionnairesPage: React.FC = () => {
   const navigate = useNavigate();
+  const [formTemplates, setFormTemplates] = useState<FormTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    fetchFormTemplates();
+  }, []);
+  
+  const fetchFormTemplates = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get('/api/form-templates');
+      setFormTemplates(response.data);
+    } catch (error) {
+      console.error('Error fetching form templates:', error);
+      toast.error('Failed to load form templates');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   // Sample data for questionnaires
   const questionnaires = [
@@ -102,9 +140,20 @@ const QuestionnairesPage: React.FC = () => {
     // Handle form click - navigate to form or open it
     console.log(`Form clicked: ${formId}`);
     
-    // If the clicked form is the New Patient Form, navigate to the add patient page
+    // If the clicked form is the New Patient Form, navigate to the new patient intake form
     if (formId === 'new-patient-form') {
-      navigate('/patients/new');
+      // Find the first form template that has "New Patient" in the title
+      const newPatientTemplate = formTemplates.find(template => 
+        template.title.toLowerCase().includes('new patient') && template.isActive
+      );
+      
+      if (newPatientTemplate) {
+        navigate(`/forms/templates/${newPatientTemplate._id}`);
+      } else {
+        // If no template is found, navigate to the form templates page
+        navigate('/forms/templates');
+        toast.info('Please create a new patient intake form template first');
+      }
     } else {
       // For other forms, we'll implement this later
       // navigate(`/forms/${formId}`);
@@ -113,35 +162,41 @@ const QuestionnairesPage: React.FC = () => {
 
   const handleCreateNew = () => {
     // Handle create new form
-    console.log('Create new form clicked');
-    // navigate('/forms/create');
+    navigate('/forms/templates/new');
   };
 
   const handleUploadExisting = () => {
     // Handle upload existing form
-    console.log('Upload existing form clicked');
-    // navigate('/forms/upload');
+    navigate('/forms/templates');
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Questionnaires Section */}
-      <QuestionnairesSection
-        title="Questionnaires"
-        forms={questionnaires}
-        onFormClick={handleFormClick}
-        onCreateNew={handleCreateNew}
-        onUploadExisting={handleUploadExisting}
-      />
-      
-      {/* Consent Forms Section */}
-      <QuestionnairesSection
-        title="Consent Forms"
-        forms={consentForms}
-        onFormClick={handleFormClick}
-        onCreateNew={handleCreateNew}
-        onUploadExisting={handleUploadExisting}
-      />
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      ) : (
+        <>
+          {/* Questionnaires Section */}
+          <QuestionnairesSection
+            title="Questionnaires"
+            forms={questionnaires}
+            onFormClick={handleFormClick}
+            onCreateNew={handleCreateNew}
+            onUploadExisting={handleUploadExisting}
+          />
+          
+          {/* Consent Forms Section */}
+          <QuestionnairesSection
+            title="Consent Forms"
+            forms={consentForms}
+            onFormClick={handleFormClick}
+            onCreateNew={handleCreateNew}
+            onUploadExisting={handleUploadExisting}
+          />
+        </>
+      )}
     </div>
   );
 };

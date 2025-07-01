@@ -15,7 +15,8 @@ import {
   ChevronDown,
   FileText,
   CheckSquare,
-  ClipboardList
+  ClipboardList,
+  FileEdit
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -46,6 +47,7 @@ const MainLayout: React.FC = () => {
     { path: '/reports/unsettled-cases', name: 'Unsettled Cases', icon: <FileText className="w-5 h-5" /> },
     { path: '/appointments', name: 'Appointments', icon: <Calendar className="w-5 h-5" /> },
     { path: '/forms/questionnaires', name: 'MY FORMS', icon: <ClipboardList className="w-5 h-5" /> },
+    { path: '/forms/templates', name: 'Form Builder', icon: <FileEdit className="w-5 h-5" /> },
     { path: '/billing', name: 'Billing', icon: <DollarSign className="w-5 h-5" /> },
     { path: '/settings', name: 'Settings', icon: <Settings className="w-5 h-5" /> },
     ...(user?.role === 'admin' ? [{ path: '/admin', name: 'Admin', icon: <Settings className="w-5 h-5" /> }] : [])
