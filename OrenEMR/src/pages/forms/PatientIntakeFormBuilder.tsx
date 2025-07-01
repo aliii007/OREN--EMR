@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Plus, Send, Eye, Save, ChevronUp, ChevronDown, Trash2, Copy, MoreHorizontal } from 'lucide-react';
+import { Send, Eye, Plus, ArrowLeft, ChevronUp, ChevronDown, Copy, Trash2 } from 'lucide-react';
+import PatientIntakeFormEditor from '../../components/forms/PatientIntakeFormEditor';
+import SendFormModal from '../../components/forms/SendFormModal';
 
 interface FormItem {
   id: string;
@@ -51,11 +53,10 @@ interface FormTemplate {
 const PatientIntakeFormBuilder: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const isEditMode = !!id;
   
   const [formTemplate, setFormTemplate] = useState<FormTemplate>({
-    title: 'New Patient Intake Form',
-    description: 'Standard intake form for new patients',
+    title: 'New Patient Form',
+    description: 'Patient intake form',
     isActive: true,
     isPublic: true,
     language: 'english',
@@ -65,22 +66,75 @@ const PatientIntakeFormBuilder: React.FC = () => {
   const [currentItemIndex, setCurrentItemIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
-  const [clientEmail, setClientEmail] = useState('');
-  const [clientName, setClientName] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [previewStep, setPreviewStep] = useState(0);
+  
+  // Predefined questions
+  const predefinedQuestions = [
+    { id: '1', questionText: 'Language Preference', type: 'blank', isRequired: false },
+    { id: '2', questionText: 'Who referred you? Which hospital, clinic, urgent care and/or medical provider?', type: 'blank', isRequired: false },
+    { id: '3', questionText: 'Who referred you? Which hospital, clinic, urgent care and/or medical provider? ¿Es usted un paciente nuevo o ya establecido en Hand, Nerve & Microsurgery PC?', type: 'blank', isRequired: false },
+    { id: '4', questionText: 'Please enter your information.', type: 'demographics', isRequired: true },
+    { id: '5', questionText: 'Please enter your information. Por favor, introduzca su información.', type: 'demographics', isRequired: true },
+    { id: '6', questionText: 'Do you have medical insurance?', type: 'blank', isRequired: true },
+    { id: '7', questionText: 'Do you have medical insurance? ¿Tiene seguro médico?', type: 'blank', isRequired: true },
+    { id: '8', questionText: 'Primary Insurance', type: 'primaryInsurance', isRequired: true },
+    { id: '9', questionText: 'Primary Insurance Seguro Primario', type: 'primaryInsurance', isRequired: true },
+    { id: '10', questionText: 'Please capture a high-resolution image of the front side of your government issued identification card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability.', type: 'blank', isRequired: true },
+    { id: '11', questionText: 'Please capture a high-resolution image of the front side of your government issued identification card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability. Por favor, tome una imagen en alta resolución de la parte frontal de su tarjeta de identificación emitida por el gobierno, colocándola en una superficie nivelada. Asegúrese de que la tarjeta ocupe la mayor parte del visor de la cámara para mejorar la legibilidad.', type: 'blank', isRequired: true },
+    { id: '12', questionText: 'Please capture a high-resolution image of the front side and backside of your health insurance card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability.', type: 'blank', isRequired: true },
+    { id: '13', questionText: 'Please capture a high-resolution image of the front side and backside of your health insurance card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability. Por favor, tome una imagen en alta resolución de ambos lados (frontal y posterior) de su tarjeta de seguro de salud, colocándola en una superficie nivelada. Asegúrese de que la tarjeta ocupe la mayor parte del visor de la cámara para mejorar la legibilidad.', type: 'blank', isRequired: true },
+    { id: '14', questionText: 'Please capture a high-resolution image of your auto insurance card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability. Por favor, tome una imagen en alta resolución de su tarjeta de seguro de automóvil, colocándola en una superficie nivelada. Asegúrese de que la tarjeta ocupe la mayor parte del visor de la cámara para mejorar la legibilidad.', type: 'blank', isRequired: true },
+    { id: '15', questionText: 'Hand Dominance, Occupation, Hobbies', type: 'blank', isRequired: false },
+    { id: '16', questionText: 'Hand Dominance, Occupation, Hobbies Dominancia Manual, Ocupación, Aficiones', type: 'blank', isRequired: false },
+    { id: '17', questionText: 'Is this visit for an established problem or a new problem?', type: 'blank', isRequired: true },
+    { id: '18', questionText: 'Is this visit for an established problem or a new problem? ¿Esta visita es por un problema establecido o un problema nuevo?', type: 'blank', isRequired: true },
+    { id: '19', questionText: 'Visit Related Details', type: 'blank', isRequired: false },
+    { id: '20', questionText: 'Visit Related Details Detalles Relacionados con la Visita', type: 'blank', isRequired: false },
+    { id: '21', questionText: 'Previous Care', type: 'blank', isRequired: false },
+    { id: '22', questionText: 'Previous Care Cuidados Previos', type: 'blank', isRequired: false },
+    { id: '23', questionText: 'Please provide as much detail as possible about the incident surrounding the injury so that I can write as detailed a note as possible to help your case. Try to Include how it happened, where it happened, care received initially and ongoing, any relevant dates.', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '24', questionText: 'Please provide as much detail as possible about the incident surrounding the injury so that I can write as detailed a note as possible to help your case. Try to Include how it happened, where it happened, care received initially and ongoing, any relevant dates. Por favor, proporcione tanto detalle como sea posible sobre el incidente que rodea la lesión para que pueda escribir una nota lo más detallada posible para ayudar en su caso. Intente incluir cómo sucedió, dónde sucedió, atención recibida inicialmente y continuada, cualquier fecha relevante.', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '25', questionText: 'How does it impact your quality of life?', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '26', questionText: 'How does it impact your quality of life? ¿Cómo afecta esto a su calidad de vida?', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '27', questionText: 'Have you had any serious conditions, illnesses, injuries, and/or hospitalizations in the past? If \'yes\', please list approximate dates. If you have none write "not applicable".', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '28', questionText: 'Have you had any serious conditions, illnesses, injuries, and/or hospitalizations in the past? If \'yes\', please list approximate dates. If you have none write "not applicable". ¿Ha tenido alguna condición seria, enfermedad, lesión y/o hospitalización en el pasado? Si es \'sí\', por favor liste las fechas aproximadas. Si no tiene ninguno, escriba "no aplica".', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '29', questionText: 'Do you have any allergies (medicines, cosmetics, environmental, foods)? If \'yes\', please describe. If you have none write "no".', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '30', questionText: 'Do you have any allergies (medicines, cosmetics, environmental, foods)? If \'yes\', please describe. ¿Tiene alguna alergia (medicamentos, cosméticos, ambientales, alimentos)? Si es \'sí\', por favor describa. Si no tiene ninguno, escriba "no".', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '31', questionText: 'Cardiovascular Please check the boxes for any condition(s) you have experienced or are experiencing:', type: 'blank', isRequired: false },
+    { id: '32', questionText: 'Cardiovascular Please check the boxes for any condition(s) you have experienced or are experiencing: Cardiovascular Por favor, marque las casillas de cualquier condición que haya experimentado o esté experimentando:', type: 'blank', isRequired: false },
+    { id: '33', questionText: 'Respiratory Please check the boxes for any condition(s) you have experienced or are experiencing:', type: 'blank', isRequired: false },
+    { id: '34', questionText: 'Respiratory / Respiratorio Please check the boxes for any condition(s) you have experienced or are experiencing: Por favor, marque las casillas de cualquier condición que haya experimentado o esté experimentando:', type: 'blank', isRequired: false },
+    { id: '35', questionText: 'Communicable Diseases Please check the boxes for any condition(s) you have experienced or are experiencing:', type: 'blank', isRequired: false },
+    { id: '36', questionText: 'Communicable Diseases / Enfermedades transmisibles Please check the boxes for any condition(s) you have experienced or are experiencing: Por favor, marque las casillas de cualquier condición que haya experimentado o esté experimentando:', type: 'blank', isRequired: false },
+    { id: '37', questionText: 'Diabetes', type: 'blank', isRequired: false },
+    { id: '38', questionText: 'Diabetes', type: 'blank', isRequired: false },
+    { id: '39', questionText: 'Please list any previous surgical procedures and any details/hardware (i.e. prosthesis, wires, internal pins/fixators). If no then press no.', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '40', questionText: 'Please list any previous surgical procedures and any details/hardware (i.e. prosthesis, wires, internal pins/fixators). Por favor, liste cualquier procedimiento quirúrgico previo y cualquier detalle/hardware (por ejemplo, prótesis, alambres, clavos/pinzas internos). Si no tiene, escriba "no".', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '41', questionText: 'Habits and Lifestyle', type: 'blank', isRequired: false },
+    { id: '42', questionText: 'Habits and Lifestyle Hábitos y Estilo de Vida', type: 'blank', isRequired: false },
+    { id: '43', questionText: 'Please list all current medications (prescription, over-the-counter, vitamins, herbs, homeopathics) and specify the date your started using it and dosage.', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '44', questionText: 'Please list all current medications (prescription, over-the-counter, vitamins, herbs, homeopathics) and specify the date your started using it and dosage. Por favor, liste todos los medicamentos actuales (prescripción, sin receta, vitaminas, hierbas, homeopáticos) y especifique la fecha en que comenzó a usarlo y la dosis.', type: 'blank', isRequired: true, multipleLines: true },
+    { id: '45', questionText: 'Supplements:', type: 'blank', isRequired: false },
+    { id: '46', questionText: 'Supplements: Suplementos:', type: 'blank', isRequired: false },
+    { id: '47', questionText: 'Please upload any relevant medical reports or documentation that will aid in the assessment and management of your condition. This may include, but is not limited to, imaging studies such as X-rays, MRI, or CT scans; nerve conduction studies; and clear, high-resolution photographs of your injury. Additionally, please feel free to include any other information or documentation that you believe may be pertinent to your case. Providing comprehensive and detailed information will enable us to gain a better understanding of your condition and facilitate the delivery of the highest quality care tailored to your needs.', type: 'blank', isRequired: false, multipleLines: true },
+    { id: '48', questionText: 'Please upload any relevant medical reports or documentation that will aid in the assessment and management of your condition. This may include, but is not limited to, imaging studies such as X-rays, MRI, or CT scans; nerve conduction studies; and clear, high-resolution photographs of your injury. Additionally, please feel free to include any other information or documentation that you believe may be pertinent to your case. Providing comprehensive and detailed information will enable us to gain a better understanding of your condition and facilitate the delivery of the highest quality care tailored to your needs. Por favor, suba cualquier informe médico relevante o documentación que ayudará en la evaluación y manejo de su condición. Esto puede incluir, pero no se limita a, estudios de imagen como rayos X, MRI o tomografías computarizadas; estudios de conducción nerviosa; y fotografías claras y en alta resolución de su lesión. Adicionalmente, no dude en incluir cualquier otra información o documentación que crea que pueda ser pertinente a su caso. Proporcionar información completa y detallada nos permitirá obtener una mejor comprensión de su condición y facilitar la entrega de la atención de la más alta calidad adaptada a sus necesidades.', type: 'blank', isRequired: false, multipleLines: true },
+    { id: '49', questionText: 'Communication Preferences in reference to the previous section on HIPAA Please indicate how you would like to receive communications from our office regarding your medical care, appointments, test results, or billing information. You may select one or more options:', type: 'blank', isRequired: true },
+    { id: '50', questionText: 'Preferencias de Comunicación en referencia a la sección anterior sobre HIPAA Indique cómo prefiere recibir comunicaciones de nuestra oficina con respecto a su atención médica, citas, resultados de exámenes o información de facturación. Puede seleccionar una o más opciones:', type: 'blank', isRequired: true }
+  ];
   
   // Fetch form template if in edit mode
   useEffect(() => {
-    if (isEditMode) {
+    if (id) {
       fetchFormTemplate();
     } else {
-      // Create a default form with the required questions
-      createDefaultForm();
+      // Initialize with predefined questions
+      setFormTemplate(prev => ({
+        ...prev,
+        items: predefinedQuestions
+      }));
     }
-  }, [isEditMode, id]);
+  }, [id]);
   
   const fetchFormTemplate = async () => {
     setIsLoading(true);
@@ -88,9 +142,12 @@ const PatientIntakeFormBuilder: React.FC = () => {
       const response = await axios.get(`/api/form-templates/${id}`);
       setFormTemplate(response.data);
       
-      // Select the first item if there are any
-      if (response.data.items.length > 0) {
-        setCurrentItemIndex(0);
+      // If there are no items, add the predefined questions
+      if (!response.data.items || response.data.items.length === 0) {
+        setFormTemplate(prev => ({
+          ...prev,
+          items: predefinedQuestions
+        }));
       }
     } catch (error) {
       console.error('Error fetching form template:', error);
@@ -98,260 +155,6 @@ const PatientIntakeFormBuilder: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-  
-  const createDefaultForm = () => {
-    // Create a form with all the required questions
-    const defaultItems: FormItem[] = [
-      {
-        id: 'q1',
-        type: 'blank',
-        questionText: 'Language Preference',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q2',
-        type: 'blank',
-        questionText: 'Who referred you? Which hospital, clinic, urgent care and/or medical provider?',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q3',
-        type: 'blank',
-        questionText: 'Who referred you? Which hospital, clinic, urgent care and/or medical provider? ¿Es usted un paciente nuevo o ya establecido en Hand, Nerve & Microsurgery PC?',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q4',
-        type: 'blank',
-        questionText: 'Please enter your information.',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q5',
-        type: 'blank',
-        questionText: 'Please enter your information. Por favor, introduzca su información.',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q6',
-        type: 'blank',
-        questionText: 'Do you have medical insurance?',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q7',
-        type: 'blank',
-        questionText: 'Do you have medical insurance? ¿Tiene seguro médico?',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q8',
-        type: 'primaryInsurance',
-        questionText: 'Primary Insurance',
-        isRequired: true,
-        instructions: 'Please provide your primary insurance details.',
-        insuranceFields: [
-          { fieldName: 'Insurance Company', fieldType: 'text', required: true },
-          { fieldName: 'Policy Number', fieldType: 'text', required: true },
-          { fieldName: 'Group Number', fieldType: 'text', required: false },
-          { fieldName: 'Policyholder Name', fieldType: 'text', required: true },
-          { fieldName: 'Relationship to Policyholder', fieldType: 'dropdown', required: true, options: ['Self', 'Spouse', 'Child', 'Other'] }
-        ]
-      },
-      {
-        id: 'q9',
-        type: 'primaryInsurance',
-        questionText: 'Primary Insurance Seguro Primario',
-        isRequired: true,
-        instructions: 'Please provide your primary insurance details.',
-        insuranceFields: [
-          { fieldName: 'Insurance Company', fieldType: 'text', required: true },
-          { fieldName: 'Policy Number', fieldType: 'text', required: true },
-          { fieldName: 'Group Number', fieldType: 'text', required: false },
-          { fieldName: 'Policyholder Name', fieldType: 'text', required: true },
-          { fieldName: 'Relationship to Policyholder', fieldType: 'dropdown', required: true, options: ['Self', 'Spouse', 'Child', 'Other'] }
-        ]
-      },
-      {
-        id: 'q10',
-        type: 'blank',
-        questionText: 'Please capture a high-resolution image of the front side of your government issued identification card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability.',
-        isRequired: true,
-        multipleLines: true
-      },
-      // Add all the remaining questions from the list
-      {
-        id: 'q11',
-        type: 'blank',
-        questionText: 'Please capture a high-resolution image of the front side of your government issued identification card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability. Por favor, tome una imagen en alta resolución de la parte frontal de su tarjeta de identificación emitida por el gobierno, colocándola en una superficie nivelada. Asegúrese de que la tarjeta ocupe la mayor parte del visor de la cámara para mejorar la legibilidad.',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q12',
-        type: 'blank',
-        questionText: 'Please capture a high-resolution image of the front side and backside of your health insurance card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability.',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q13',
-        type: 'blank',
-        questionText: 'Please capture a high-resolution image of the front side and backside of your health insurance card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability. Por favor, tome una imagen en alta resolución de ambos lados (frontal y posterior) de su tarjeta de seguro de salud, colocándola en una superficie nivelada. Asegúrese de que la tarjeta ocupe la mayor parte del visor de la cámara para mejorar la legibilidad.',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q14',
-        type: 'blank',
-        questionText: 'Please capture a high-resolution image of your auto insurance card by positioning it on a level surface. Ensure the card occupies the majority of the camera\'s viewfinder to enhance readability. Por favor, tome una imagen en alta resolución de su tarjeta de seguro de automóvil, colocándola en una superficie nivelada. Asegúrese de que la tarjeta ocupe la mayor parte del visor de la cámara para mejorar la legibilidad.',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q15',
-        type: 'blank',
-        questionText: 'Hand Dominance, Occupation, Hobbies',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q16',
-        type: 'blank',
-        questionText: 'Hand Dominance, Occupation, Hobbies Dominancia Manual, Ocupación, Aficiones',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q17',
-        type: 'blank',
-        questionText: 'Is this visit for an established problem or a new problem?',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q18',
-        type: 'blank',
-        questionText: 'Is this visit for an established problem or a new problem? ¿Esta visita es por un problema establecido o un problema nuevo?',
-        isRequired: true,
-        multipleLines: false
-      },
-      {
-        id: 'q19',
-        type: 'blank',
-        questionText: 'Visit Related Details',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q20',
-        type: 'blank',
-        questionText: 'Visit Related Details Detalles Relacionados con la Visita',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q21',
-        type: 'blank',
-        questionText: 'Previous Care',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q22',
-        type: 'blank',
-        questionText: 'Previous Care Cuidados Previos',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q23',
-        type: 'blank',
-        questionText: 'Please provide as much detail as possible about the incident surrounding the injury so that I can write as detailed a note as possible to help your case. Try to Include how it happened, where it happened, care received initially and ongoing, any relevant dates.',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q24',
-        type: 'blank',
-        questionText: 'Please provide as much detail as possible about the incident surrounding the injury so that I can write as detailed a note as possible to help your case. Try to Include how it happened, where it happened, care received initially and ongoing, any relevant dates. Por favor, proporcione tanto detalle como sea posible sobre el incidente que rodea la lesión para que pueda escribir una nota lo más detallada posible para ayudar en su caso. Intente incluir cómo sucedió, dónde sucedió, atención recibida inicialmente y continuada, cualquier fecha relevante.',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q25',
-        type: 'blank',
-        questionText: 'How does it impact your quality of life?',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q26',
-        type: 'blank',
-        questionText: 'How does it impact your quality of life? ¿Cómo afecta esto a su calidad de vida?',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q27',
-        type: 'blank',
-        questionText: 'Have you had any serious conditions, illnesses, injuries, and/or hospitalizations in the past? If \'yes\', please list approximate dates. If you have none write "not applicable".',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q28',
-        type: 'blank',
-        questionText: 'Have you had any serious conditions, illnesses, injuries, and/or hospitalizations in the past? If \'yes\', please list approximate dates. If you have none write "not applicable". ¿Ha tenido alguna condición seria, enfermedad, lesión y/o hospitalización en el pasado? Si es \'sí\', por favor liste las fechas aproximadas. Si no tiene ninguno, escriba "no aplica".',
-        isRequired: true,
-        multipleLines: true
-      },
-      {
-        id: 'q29',
-        type: 'allergies',
-        questionText: 'Do you have any allergies (medicines, cosmetics, environmental, foods)? If \'yes\', please describe. If you have none write "no".',
-        isRequired: true,
-        matrix: {
-          rowHeader: 'Allergies',
-          columnHeaders: ['Allergic To', 'Allergy Type', 'Reaction', 'Severity', 'Date of Onset', 'End Date'],
-          columnTypes: ['text', 'dropdown', 'dropdown', 'dropdown', 'text', 'text'],
-          rows: ['1', '2', '3'],
-          dropdownOptions: [
-            [], // No options for 'Allergic To' (text field)
-            ['Food', 'Medication', 'Environmental', 'Other'], // Options for 'Allergy Type'
-            ['Rash', 'Hives', 'Swelling', 'Anaphylaxis', 'GI Issues', 'Respiratory', 'Other'], // Options for 'Reaction'
-            ['Mild', 'Moderate', 'Severe', 'Life-threatening'], // Options for 'Severity'
-            [], // No options for 'Date of Onset' (text field)
-            []  // No options for 'End Date' (text field)
-          ],
-          displayTextBox: true
-        }
-      },
-      {
-        id: 'q30',
-        type: 'blank',
-        questionText: 'Do you have any allergies (medicines, cosmetics, environmental, foods)? If \'yes\', please describe. ¿Tiene alguna alergia (medicamentos, cosméticos, ambientales, alimentos)? Si es \'sí\', por favor describa. Si no tiene ninguno, escriba "no".',
-        isRequired: true,
-        multipleLines: true
-      },
-      // Add remaining questions as needed
-    ];
-    
-    setFormTemplate(prev => ({
-      ...prev,
-      items: defaultItems
-    }));
-    
-    // Select the first item
-    setCurrentItemIndex(0);
   };
   
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -374,12 +177,11 @@ const PatientIntakeFormBuilder: React.FC = () => {
   
   const addNewQuestion = (questionType: string) => {
     let newItem: FormItem;
-    const newId = `q${formTemplate.items.length + 1}`;
     
     switch (questionType) {
       case 'blank':
         newItem = {
-          id: newId,
+          id: `item_${Date.now()}`,
           type: 'blank',
           questionText: 'Type your question text here',
           isRequired: false,
@@ -389,7 +191,7 @@ const PatientIntakeFormBuilder: React.FC = () => {
         break;
       case 'demographics':
         newItem = {
-          id: newId,
+          id: `item_${Date.now()}`,
           type: 'demographics',
           questionText: 'Demographics Information',
           isRequired: false,
@@ -398,7 +200,7 @@ const PatientIntakeFormBuilder: React.FC = () => {
             { fieldName: 'First Name', fieldType: 'text', required: true },
             { fieldName: 'Last Name', fieldType: 'text', required: true },
             { fieldName: 'Date of Birth', fieldType: 'date', required: true },
-            { fieldName: 'Gender', fieldType: 'dropdown', required: true, options: ['Male', 'Female', 'Non-Binary', 'Prefer not to say'] },
+            { fieldName: 'Gender', fieldType: 'dropdown', required: true, options: ['Female', 'Male', 'Non-Binary'] },
             { fieldName: 'Email', fieldType: 'text', required: true },
             { fieldName: 'Phone', fieldType: 'text', required: true }
           ]
@@ -406,39 +208,37 @@ const PatientIntakeFormBuilder: React.FC = () => {
         break;
       case 'primaryInsurance':
         newItem = {
-          id: newId,
+          id: `item_${Date.now()}`,
           type: 'primaryInsurance',
           questionText: 'Primary Insurance Information',
           isRequired: false,
-          instructions: 'Please provide your primary insurance details.',
+          instructions: 'Primary Insurance',
           insuranceFields: [
             { fieldName: 'Insurance Company', fieldType: 'text', required: true },
-            { fieldName: 'Policy Number', fieldType: 'text', required: true },
+            { fieldName: 'Member ID / Policy #', fieldType: 'text', required: true },
             { fieldName: 'Group Number', fieldType: 'text', required: false },
-            { fieldName: 'Policyholder Name', fieldType: 'text', required: true },
-            { fieldName: 'Relationship to Policyholder', fieldType: 'dropdown', required: true, options: ['Self', 'Spouse', 'Child', 'Other'] }
+            { fieldName: 'Relationship to Insured', fieldType: 'dropdown', required: true, options: ['Self', 'Spouse', 'Child', 'Other'] }
           ]
         };
         break;
       case 'secondaryInsurance':
         newItem = {
-          id: newId,
+          id: `item_${Date.now()}`,
           type: 'secondaryInsurance',
           questionText: 'Secondary Insurance Information',
           isRequired: false,
-          instructions: 'Please provide your secondary insurance details if applicable.',
+          instructions: 'Secondary Insurance',
           insuranceFields: [
-            { fieldName: 'Insurance Company', fieldType: 'text', required: false },
-            { fieldName: 'Policy Number', fieldType: 'text', required: false },
+            { fieldName: 'Insurance Company', fieldType: 'text', required: true },
+            { fieldName: 'Member ID / Policy #', fieldType: 'text', required: true },
             { fieldName: 'Group Number', fieldType: 'text', required: false },
-            { fieldName: 'Policyholder Name', fieldType: 'text', required: false },
-            { fieldName: 'Relationship to Policyholder', fieldType: 'dropdown', required: false, options: ['Self', 'Spouse', 'Child', 'Other'] }
+            { fieldName: 'Relationship to Insured', fieldType: 'dropdown', required: true, options: ['Self', 'Spouse', 'Child', 'Other'] }
           ]
         };
         break;
       case 'allergies':
         newItem = {
-          id: newId,
+          id: `item_${Date.now()}`,
           type: 'allergies',
           questionText: 'Please enter the details of any allergies',
           isRequired: false,
@@ -461,7 +261,7 @@ const PatientIntakeFormBuilder: React.FC = () => {
         break;
       default:
         newItem = {
-          id: newId,
+          id: `item_${Date.now()}`,
           type: 'blank',
           questionText: 'Type your question text here',
           isRequired: false,
@@ -478,6 +278,7 @@ const PatientIntakeFormBuilder: React.FC = () => {
     
     // Select the newly added item
     setCurrentItemIndex(updatedItems.length - 1);
+    setShowAddMenu(false);
   };
   
   const updateQuestion = (index: number, updatedItem: FormItem) => {
@@ -491,9 +292,7 @@ const PatientIntakeFormBuilder: React.FC = () => {
   };
   
   const duplicateQuestion = (index: number) => {
-    const itemToDuplicate = { ...formTemplate.items[index] };
-    // Generate a new ID for the duplicated item
-    itemToDuplicate.id = `q${formTemplate.items.length + 1}`;
+    const itemToDuplicate = { ...formTemplate.items[index], id: `item_${Date.now()}` };
     
     const updatedItems = [
       ...formTemplate.items.slice(0, index + 1),
@@ -537,7 +336,7 @@ const PatientIntakeFormBuilder: React.FC = () => {
   };
   
   const moveQuestionUp = (index: number) => {
-    if (index === 0) return; // Already at the top
+    if (index === 0) return;
     
     const updatedItems = [...formTemplate.items];
     const temp = updatedItems[index];
@@ -558,7 +357,7 @@ const PatientIntakeFormBuilder: React.FC = () => {
   };
   
   const moveQuestionDown = (index: number) => {
-    if (index === formTemplate.items.length - 1) return; // Already at the bottom
+    if (index === formTemplate.items.length - 1) return;
     
     const updatedItems = [...formTemplate.items];
     const temp = updatedItems[index];
@@ -595,7 +394,7 @@ const PatientIntakeFormBuilder: React.FC = () => {
     try {
       let response;
       
-      if (isEditMode) {
+      if (id) {
         response = await axios.put(`/api/form-templates/${id}`, formTemplate);
         toast.success('Form template updated successfully');
       } else {
@@ -613,523 +412,29 @@ const PatientIntakeFormBuilder: React.FC = () => {
     }
   };
   
-  const handleSendToClient = async () => {
-    if (!clientEmail || !clientName) {
-      toast.error('Client email and name are required');
-      return;
-    }
-    
+  const handleSendForm = async (data: any) => {
     try {
-      const response = await axios.post('/api/patients/send-to-client', {
-        email: clientEmail,
-        name: clientName,
-        instructions: instructions,
-        language: formTemplate.language || 'english',
-        formTemplateId: formTemplate._id
+      await axios.post('/api/patients/send-to-client', {
+        email: data.clientEmail,
+        name: data.clientName,
+        instructions: data.instructions,
+        formTemplateId: id
       });
       
       toast.success('Form sent successfully to client');
       setShowSendModal(false);
-      setClientEmail('');
-      setClientName('');
-      setInstructions('');
     } catch (error) {
       console.error('Error sending form:', error);
-      toast.error('Failed to send form to client');
+      return Promise.reject(error);
     }
   };
   
   const handlePreview = () => {
-    setShowPreview(true);
-    setPreviewStep(0);
-  };
-  
-  const handleQuestionTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (currentItemIndex === null) return;
-    
-    const updatedItem = { ...formTemplate.items[currentItemIndex] };
-    updatedItem.questionText = e.target.value;
-    
-    updateQuestion(currentItemIndex, updatedItem);
-  };
-  
-  const handleRequiredChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (currentItemIndex === null) return;
-    
-    const updatedItem = { ...formTemplate.items[currentItemIndex] };
-    updatedItem.isRequired = e.target.checked;
-    
-    updateQuestion(currentItemIndex, updatedItem);
-  };
-  
-  const handleMultipleLinesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (currentItemIndex === null || formTemplate.items[currentItemIndex].type !== 'blank') return;
-    
-    const updatedItem = { ...formTemplate.items[currentItemIndex] };
-    updatedItem.multipleLines = e.target.checked;
-    
-    updateQuestion(currentItemIndex, updatedItem);
-  };
-  
-  const handlePlaceholderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (currentItemIndex === null || formTemplate.items[currentItemIndex].type !== 'blank') return;
-    
-    const updatedItem = { ...formTemplate.items[currentItemIndex] };
-    updatedItem.placeholder = e.target.value;
-    
-    updateQuestion(currentItemIndex, updatedItem);
-  };
-  
-  const handleInstructionsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (currentItemIndex === null) return;
-    
-    const updatedItem = { ...formTemplate.items[currentItemIndex] };
-    updatedItem.instructions = e.target.value;
-    
-    updateQuestion(currentItemIndex, updatedItem);
-  };
-  
-  const renderQuestionEditor = () => {
-    if (currentItemIndex === null || !formTemplate.items[currentItemIndex]) {
-      return (
-        <div className="flex items-center justify-center h-64 bg-gray-50 border border-gray-200 rounded-lg">
-          <div className="text-center">
-            <p className="text-gray-500 mb-4">No question selected</p>
-            <button
-              onClick={() => addNewQuestion('blank')}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-            >
-              <Plus className="inline-block mr-2 h-4 w-4" />
-              Add Question
-            </button>
-          </div>
-        </div>
-      );
-    }
-    
-    const currentItem = formTemplate.items[currentItemIndex];
-    
-    return (
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <div className="mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-medium text-gray-900">Question Type</h2>
-            <div className="flex items-center">
-              <button
-                type="button"
-                className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Question Options
-              </button>
-            </div>
-          </div>
-          
-          <div className="relative">
-            <select
-              value={currentItem.type}
-              disabled
-              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-            >
-              <option value="blank">Open Answer</option>
-              <option value="demographics">Demographics</option>
-              <option value="primaryInsurance">Primary Insurance</option>
-              <option value="secondaryInsurance">Secondary Insurance</option>
-              <option value="allergies">Allergies Matrix</option>
-            </select>
-          </div>
-        </div>
-        
-        <div className="mb-6">
-          <div className="flex justify-between items-center mb-1">
-            <label htmlFor="questionText" className="block text-sm font-medium text-gray-700">
-              Question
-            </label>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="isRequired"
-                checked={currentItem.isRequired}
-                onChange={handleRequiredChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="isRequired" className="ml-2 block text-sm text-gray-900">
-                Is Required
-              </label>
-            </div>
-          </div>
-          <textarea
-            id="questionText"
-            value={currentItem.questionText}
-            onChange={handleQuestionTextChange}
-            rows={3}
-            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-            placeholder="Type your question text here"
-          />
-        </div>
-        
-        {currentItem.type === 'blank' && (
-          <>
-            <div className="mb-6">
-              <div className="flex items-center mb-4">
-                <input
-                  type="checkbox"
-                  id="multipleLines"
-                  checked={currentItem.multipleLines}
-                  onChange={handleMultipleLinesChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="multipleLines" className="ml-2 block text-sm text-gray-900">
-                  Provide multiple lines for answer
-                </label>
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <label htmlFor="placeholder" className="block text-sm font-medium text-gray-700 mb-1">
-                Placeholder
-              </label>
-              <input
-                type="text"
-                id="placeholder"
-                value={currentItem.placeholder || ''}
-                onChange={handlePlaceholderChange}
-                className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                placeholder="Enter placeholder text"
-              />
-            </div>
-          </>
-        )}
-        
-        {(currentItem.type === 'demographics' || currentItem.type === 'primaryInsurance' || currentItem.type === 'secondaryInsurance') && (
-          <div className="mb-6">
-            <label htmlFor="instructions" className="block text-sm font-medium text-gray-700 mb-1">
-              Block Instructions (optional)
-            </label>
-            <textarea
-              id="instructions"
-              value={currentItem.instructions || ''}
-              onChange={handleInstructionsChange}
-              rows={3}
-              className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-              placeholder="Enter instructions for this section"
-            />
-          </div>
-        )}
-        
-        <div className="flex justify-end space-x-2 mt-6">
-          <button
-            type="button"
-            onClick={() => duplicateQuestion(currentItemIndex)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
-          </button>
-          <button
-            type="button"
-            onClick={() => deleteQuestion(currentItemIndex)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </button>
-        </div>
-      </div>
-    );
-  };
-  
-  const renderPreview = () => {
-    if (!showPreview || formTemplate.items.length === 0) return null;
-    
-    const currentQuestion = formTemplate.items[previewStep];
-    
-    return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold">Form Preview</h2>
-              <button
-                onClick={() => setShowPreview(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                &times;
-              </button>
-            </div>
-            
-            <div className="bg-gray-100 p-6 rounded-lg">
-              <div className="mb-2 text-sm text-gray-500">
-                Question {previewStep + 1} of {formTemplate.items.length}
-              </div>
-              
-              <div className="h-2 w-full bg-gray-300 rounded-full mb-6">
-                <div 
-                  className="h-2 bg-green-500 rounded-full"
-                  style={{ width: `${((previewStep + 1) / formTemplate.items.length) * 100}%` }}
-                ></div>
-              </div>
-              
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-medium mb-4">{currentQuestion.questionText}</h3>
-                
-                {currentQuestion.type === 'blank' && (
-                  <div>
-                    {currentQuestion.multipleLines ? (
-                      <textarea
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                        rows={4}
-                        placeholder={currentQuestion.placeholder || 'Enter your answer here'}
-                        disabled
-                      ></textarea>
-                    ) : (
-                      <input
-                        type="text"
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                        placeholder={currentQuestion.placeholder || 'Enter your answer here'}
-                        disabled
-                      />
-                    )}
-                  </div>
-                )}
-                
-                {currentQuestion.type === 'demographics' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {currentQuestion.demographicFields?.map((field, index) => (
-                      <div key={index}>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {field.fieldName}{field.required && <span className="text-red-500">*</span>}
-                        </label>
-                        {field.fieldType === 'text' && (
-                          <input
-                            type="text"
-                            className="w-full p-2 border border-gray-300 rounded-md"
-                            placeholder={`Enter ${field.fieldName.toLowerCase()}`}
-                            disabled
-                          />
-                        )}
-                        {field.fieldType === 'date' && (
-                          <input
-                            type="date"
-                            className="w-full p-2 border border-gray-300 rounded-md"
-                            disabled
-                          />
-                        )}
-                        {field.fieldType === 'dropdown' && (
-                          <select
-                            className="w-full p-2 border border-gray-300 rounded-md"
-                            disabled
-                          >
-                            <option value="">Select {field.fieldName}</option>
-                            {field.options?.map((option, i) => (
-                              <option key={i} value={option}>{option}</option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {(currentQuestion.type === 'primaryInsurance' || currentQuestion.type === 'secondaryInsurance') && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {currentQuestion.insuranceFields?.map((field, index) => (
-                      <div key={index}>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {field.fieldName}{field.required && <span className="text-red-500">*</span>}
-                        </label>
-                        {field.fieldType === 'text' && (
-                          <input
-                            type="text"
-                            className="w-full p-2 border border-gray-300 rounded-md"
-                            placeholder={`Enter ${field.fieldName.toLowerCase()}`}
-                            disabled
-                          />
-                        )}
-                        {field.fieldType === 'date' && (
-                          <input
-                            type="date"
-                            className="w-full p-2 border border-gray-300 rounded-md"
-                            disabled
-                          />
-                        )}
-                        {field.fieldType === 'dropdown' && (
-                          <select
-                            className="w-full p-2 border border-gray-300 rounded-md"
-                            disabled
-                          >
-                            <option value="">Select {field.fieldName}</option>
-                            {field.options?.map((option, i) => (
-                              <option key={i} value={option}>{option}</option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {currentQuestion.type === 'allergies' && (
-                  <div>
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead>
-                        <tr>
-                          {currentQuestion.matrix?.columnHeaders.map((header, index) => (
-                            <th key={index} className="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              {header}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {currentQuestion.matrix?.rows.map((row, rowIndex) => (
-                          <tr key={rowIndex}>
-                            {currentQuestion.matrix?.columnHeaders.map((_, colIndex) => (
-                              <td key={colIndex} className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                                {currentQuestion.matrix?.columnTypes[colIndex] === 'dropdown' ? (
-                                  <select
-                                    className="w-full p-1 border border-gray-300 rounded-md text-sm"
-                                    disabled
-                                  >
-                                    <option value="">Select</option>
-                                    {currentQuestion.matrix?.dropdownOptions[colIndex]?.map((option, i) => (
-                                      <option key={i} value={option}>{option}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    className="w-full p-1 border border-gray-300 rounded-md text-sm"
-                                    disabled
-                                  />
-                                )}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    
-                    {currentQuestion.matrix?.displayTextBox && (
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Additional Information
-                        </label>
-                        <textarea
-                          className="w-full p-2 border border-gray-300 rounded-md"
-                          rows={3}
-                          placeholder="Enter any additional information about your allergies"
-                          disabled
-                        ></textarea>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex justify-between mt-6">
-                <button
-                  onClick={() => setPreviewStep(prev => Math.max(0, prev - 1))}
-                  disabled={previewStep === 0}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setPreviewStep(prev => Math.min(formTemplate.items.length - 1, prev + 1))}
-                  disabled={previewStep === formTemplate.items.length - 1}
-                  className="px-4 py-2 bg-green-500 text-white rounded-md disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  const renderSendModal = () => {
-    if (!showSendModal) return null;
-    
-    return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Send Form to Client</h2>
-              <button
-                onClick={() => setShowSendModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                &times;
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="clientName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Client Name*
-                </label>
-                <input
-                  type="text"
-                  id="clientName"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  placeholder="Enter client name"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="clientEmail" className="block text-sm font-medium text-gray-700 mb-1">
-                  Client Email*
-                </label>
-                <input
-                  type="email"
-                  id="clientEmail"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  placeholder="Enter client email"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="instructions" className="block text-sm font-medium text-gray-700 mb-1">
-                  Instructions (Optional)
-                </label>
-                <textarea
-                  id="instructions"
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  rows={3}
-                  placeholder="Enter any special instructions for the client"
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-end mt-6 space-x-2">
-              <button
-                onClick={() => setShowSendModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendToClient}
-                className="px-4 py-2 bg-blue-500 text-white rounded-md"
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    // Save the form first to ensure all changes are persisted
+    saveFormTemplate().then(() => {
+      // Open the preview in a new window/tab
+      window.open(`/forms/templates/${id || 'new'}/preview`, '_blank');
+    });
   };
   
   if (isLoading) {
@@ -1141,156 +446,197 @@ const PatientIntakeFormBuilder: React.FC = () => {
   }
   
   return (
-    <div className="container mx-auto">
-      {/* Header with buttons */}
-      <div className="bg-blue-800 text-white p-4 flex items-center justify-between">
+    <div className="container mx-auto px-0">
+      {/* Top Navigation Bar */}
+      <div className="flex items-center bg-blue-900 text-white h-12">
         <button
           onClick={() => navigate('/forms/templates')}
-          className="flex items-center text-white"
+          className="px-4 h-full flex items-center hover:bg-blue-800"
         >
-          <ArrowLeft className="h-5 w-5 mr-1" />
-          Back
+          <ArrowLeft className="h-5 w-5" />
         </button>
         
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setShowSendModal(true)}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            <Send className="h-4 w-4 mr-2" />
-            Send to Client
+        <button
+          onClick={() => setShowSendModal(true)}
+          className="px-4 h-full flex items-center hover:bg-blue-800 border-l border-blue-800"
+        >
+          <Send className="h-5 w-5 mr-2" />
+          <span>Send to Client</span>
+        </button>
+        
+        <button
+          onClick={handlePreview}
+          className="px-4 h-full flex items-center hover:bg-blue-800 border-l border-blue-800"
+        >
+          <Eye className="h-5 w-5 mr-2" />
+          <span>Preview</span>
+        </button>
+        
+        <div className="px-4 h-full flex items-center hover:bg-blue-800 border-l border-blue-800">
+          <button onClick={() => setShowAddMenu(!showAddMenu)} className="relative">
+            <Plus className="h-5 w-5" />
           </button>
           
-          <button
-            onClick={handlePreview}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            Preview
-          </button>
-          
-          <button
-            onClick={saveFormTemplate}
-            disabled={isSaving}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            {isSaving ? 'Saving...' : 'Save'}
-          </button>
-          
-          <button className="px-2 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-      
-      <div className="flex">
-        {/* Left sidebar - Question list */}
-        <div className="w-1/4 bg-white border-r border-gray-200 h-[calc(100vh-64px)] overflow-y-auto">
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-800">{formTemplate.title}</h2>
-            <p className="text-sm text-gray-500">{formTemplate.description}</p>
-          </div>
-          
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-medium text-gray-700">Add Question</h3>
-            </div>
-            <div className="space-y-1">
+          {showAddMenu && (
+            <div className="absolute top-12 left-0 bg-white shadow-md rounded-md z-10 w-64">
               <button
                 onClick={() => addNewQuestion('blank')}
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+                className="w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100 border-b border-gray-200"
               >
                 Add Blank Question
               </button>
               <button
                 onClick={() => addNewQuestion('demographics')}
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+                className="w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100 border-b border-gray-200"
               >
                 Add Demographics Question
               </button>
               <button
                 onClick={() => addNewQuestion('primaryInsurance')}
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+                className="w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100 border-b border-gray-200"
               >
                 Add Primary Insurance Question
               </button>
               <button
                 onClick={() => addNewQuestion('secondaryInsurance')}
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+                className="w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100 border-b border-gray-200"
               >
                 Add Secondary Insurance Question
               </button>
               <button
                 onClick={() => addNewQuestion('allergies')}
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+                className="w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100"
               >
                 Add Allergies Question
               </button>
             </div>
+          )}
+        </div>
+        
+        <div className="flex-grow"></div>
+        
+        <button
+          className="px-4 h-full flex items-center bg-green-600 hover:bg-green-700"
+        >
+          <span>Read Only</span>
+        </button>
+      </div>
+      
+      <div className="flex h-[calc(100vh-48px)]">
+        {/* Left Sidebar - Questions List */}
+        <div className="w-1/3 bg-gray-50 border-r border-gray-200 overflow-y-auto">
+          <div className="p-4 border-b border-gray-200 flex items-center">
+            <input
+              type="checkbox"
+              className="mr-2"
+              disabled
+            />
+            <h2 className="text-blue-800 font-medium">New Patient Form (Read Only)</h2>
+            <button className="ml-auto">
+              <Plus className="h-5 w-5 text-gray-500" />
+            </button>
           </div>
           
-          <div className="p-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Questions</h3>
-            <div className="space-y-1">
-              {formTemplate.items.map((item, index) => (
-                <div 
-                  key={item.id}
-                  className={`relative border-l-4 ${currentItemIndex === index ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-gray-50'} transition-colors`}
-                >
-                  <button
-                    onClick={() => setCurrentItemIndex(index)}
-                    className="w-full text-left px-3 py-2 text-sm"
-                  >
-                    <div className="flex items-center">
-                      <span className="mr-2 text-gray-500">{index + 1}.</span>
-                      <span className="truncate flex-1">
-                        {item.questionText.length > 50 
-                          ? `${item.questionText.substring(0, 50)}...` 
-                          : item.questionText}
-                      </span>
-                    </div>
-                  </button>
-                  
-                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex space-x-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        moveQuestionUp(index);
-                      }}
-                      className="p-1 text-gray-400 hover:text-gray-600"
-                      disabled={index === 0}
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        moveQuestionDown(index);
-                      }}
-                      className="p-1 text-gray-400 hover:text-gray-600"
-                      disabled={index === formTemplate.items.length - 1}
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
+          <div className="overflow-y-auto">
+            {formTemplate.items.map((item, index) => (
+              <div 
+                key={item.id} 
+                className={`flex items-start p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${currentItemIndex === index ? 'bg-yellow-50' : ''}`}
+                onClick={() => setCurrentItemIndex(index)}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1 mr-2"
+                  checked={item.isRequired}
+                  onChange={(e) => {
+                    const updatedItem = { ...item, isRequired: e.target.checked };
+                    updateQuestion(index, updatedItem);
+                  }}
+                />
+                <div className="flex-grow">
+                  <div className="flex items-center">
+                    <span className="text-gray-500 mr-2">{index + 1}.</span>
+                    <span className="text-sm">{item.questionText.length > 60 ? item.questionText.substring(0, 60) + '...' : item.questionText}</span>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="flex items-center ml-2">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveQuestionUp(index);
+                    }}
+                    className="p-1 text-gray-500 hover:text-gray-700"
+                    disabled={index === 0}
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveQuestionDown(index);
+                    }}
+                    className="p-1 text-gray-500 hover:text-gray-700"
+                    disabled={index === formTemplate.items.length - 1}
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
         
-        {/* Main content - Question editor */}
-        <div className="w-3/4 p-6 bg-gray-100 h-[calc(100vh-64px)] overflow-y-auto">
-          {renderQuestionEditor()}
+        {/* Right Content - Question Editor */}
+        <div className="w-2/3 bg-white overflow-y-auto p-6">
+          {currentItemIndex !== null && formTemplate.items[currentItemIndex] ? (
+            <>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold">Edit Question</h2>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => duplicateQuestion(currentItemIndex)}
+                    className="p-2 text-gray-600 hover:text-blue-600 border border-gray-300 rounded-md"
+                    title="Duplicate"
+                  >
+                    <Copy className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => deleteQuestion(currentItemIndex)}
+                    className="p-2 text-gray-600 hover:text-red-600 border border-gray-300 rounded-md"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              
+              <PatientIntakeFormEditor
+                item={formTemplate.items[currentItemIndex]}
+                onChange={(updatedItem) => updateQuestion(currentItemIndex, updatedItem)}
+              />
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+              <p className="mb-4">Select a question to edit or add a new question</p>
+              <button
+                onClick={() => setShowAddMenu(!showAddMenu)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                <Plus className="h-5 w-5 mr-2 inline" />
+                Add Question
+              </button>
+            </div>
+          )}
         </div>
       </div>
       
-      {/* Preview Modal */}
-      {renderPreview()}
-      
-      {/* Send to Client Modal */}
-      {renderSendModal()}
+      {/* Send Form Modal */}
+      <SendFormModal
+        isOpen={showSendModal}
+        onClose={() => setShowSendModal(false)}
+        onSend={handleSendForm}
+        formId={id}
+      />
     </div>
   );
 };

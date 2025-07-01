@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Copy, ChevronUp, ChevronDown } from 'lucide-react';
+import { Trash2, Plus } from 'lucide-react';
 
 interface FormItem {
   id: string;
@@ -38,7 +38,7 @@ interface PatientIntakeFormEditorProps {
 }
 
 const PatientIntakeFormEditor: React.FC<PatientIntakeFormEditorProps> = ({ item, onChange }) => {
-  const [showOptions, setShowOptions] = useState(false);
+  const [showFieldOptions, setShowFieldOptions] = useState<number | null>(null);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -230,15 +230,48 @@ const PatientIntakeFormEditor: React.FC<PatientIntakeFormEditorProps> = ({ item,
     });
   };
   
+  const addDropdownOption = (columnIndex: number, option: string) => {
+    if (!item.matrix) return;
+    
+    const updatedOptions = [...item.matrix.dropdownOptions];
+    if (!updatedOptions[columnIndex]) {
+      updatedOptions[columnIndex] = [];
+    }
+    
+    updatedOptions[columnIndex].push(option);
+    
+    onChange({
+      ...item,
+      matrix: {
+        ...item.matrix,
+        dropdownOptions: updatedOptions
+      }
+    });
+  };
+  
+  const removeDropdownOption = (columnIndex: number, optionIndex: number) => {
+    if (!item.matrix || !item.matrix.dropdownOptions[columnIndex]) return;
+    
+    const updatedOptions = [...item.matrix.dropdownOptions];
+    updatedOptions[columnIndex] = updatedOptions[columnIndex].filter((_, i) => i !== optionIndex);
+    
+    onChange({
+      ...item,
+      matrix: {
+        ...item.matrix,
+        dropdownOptions: updatedOptions
+      }
+    });
+  };
+  
   return (
-    <div className="bg-white shadow-md rounded-lg p-6">
+    <div className="bg-white rounded-lg">
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-medium text-gray-900">Question Type</h2>
           <div className="flex items-center">
             <button
               type="button"
-              onClick={() => setShowOptions(!showOptions)}
               className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Question Options
@@ -405,6 +438,7 @@ const PatientIntakeFormEditor: React.FC<PatientIntakeFormEditorProps> = ({ item,
               onClick={addDemographicField}
               className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
+              <Plus className="mr-2 h-4 w-4" />
               Add Field
             </button>
           </div>
@@ -474,6 +508,7 @@ const PatientIntakeFormEditor: React.FC<PatientIntakeFormEditorProps> = ({ item,
               onClick={addInsuranceField}
               className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
+              <Plus className="mr-2 h-4 w-4" />
               Add Field
             </button>
           </div>
@@ -533,6 +568,67 @@ const PatientIntakeFormEditor: React.FC<PatientIntakeFormEditorProps> = ({ item,
                           <option value="dropdown">Dropdown</option>
                         </select>
                       </div>
+                      
+                      {item.matrix.columnTypes[index] === 'dropdown' && (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowFieldOptions(showFieldOptions === index ? null : index)}
+                            className="text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            {showFieldOptions === index ? 'Hide Options' : 'Edit Options'}
+                          </button>
+                          
+                          {showFieldOptions === index && (
+                            <div className="mt-2 border border-gray-200 rounded-md p-2 bg-gray-50">
+                              <div className="mb-2">
+                                <div className="flex">
+                                  <input
+                                    type="text"
+                                    id={`new-dropdown-option-${index}`}
+                                    placeholder="Add option"
+                                    className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-l-md"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                                        addDropdownOption(index, (e.target as HTMLInputElement).value.trim());
+                                        (e.target as HTMLInputElement).value = '';
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const input = document.getElementById(`new-dropdown-option-${index}`) as HTMLInputElement;
+                                      if (input.value.trim()) {
+                                        addDropdownOption(index, input.value.trim());
+                                        input.value = '';
+                                      }
+                                    }}
+                                    className="inline-flex items-center px-2 py-1 border border-l-0 border-gray-300 shadow-sm text-xs font-medium rounded-r-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              <ul className="space-y-1 max-h-32 overflow-y-auto">
+                                {item.matrix.dropdownOptions[index]?.map((option, optionIndex) => (
+                                  <li key={optionIndex} className="flex justify-between items-center py-1 px-2 hover:bg-gray-100 rounded text-xs">
+                                    <span>{option}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeDropdownOption(index, optionIndex)}
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </th>
                   ))}
                   <th className="px-3 py-2 bg-gray-50">
@@ -541,7 +637,7 @@ const PatientIntakeFormEditor: React.FC<PatientIntakeFormEditorProps> = ({ item,
                       onClick={addMatrixColumn}
                       className="inline-flex items-center px-2 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
-                      Add Column
+                      <Plus className="h-3 w-3" />
                     </button>
                   </th>
                 </tr>
@@ -588,8 +684,14 @@ const PatientIntakeFormEditor: React.FC<PatientIntakeFormEditorProps> = ({ item,
               onClick={addMatrixRow}
               className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
+              <Plus className="mr-1 h-4 w-4" />
               Add Row
             </button>
+          </div>
+          
+          <div className="mt-4 text-xs text-gray-500">
+            <p>*Empty columns/rows will not show up in the form.</p>
+            <p>**Enumerate the rows (1,2,3,etc) and the system will let the user add more rows</p>
           </div>
           
           <div className="mt-4">

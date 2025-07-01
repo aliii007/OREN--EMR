@@ -163,14 +163,14 @@ const QuestionnairesPage: React.FC = () => {
       );
       
       if (newPatientTemplate) {
-        navigate(`/forms/templates/${newPatientTemplate._id}`);
+        navigate(`/forms/templates/${newPatientTemplate._id}/builder`);
       } else {
         // If no template is found, navigate to the form builder to create one
         navigate('/forms/templates/new?newPatient=true');
       }
     } else if (formId.length === 24) {
       // This is likely a MongoDB ObjectId, so navigate to the form template
-      navigate(`/forms/templates/${formId}`);
+      navigate(`/forms/templates/${formId}/builder`);
     } else {
       // For other forms, we'll implement this later
       toast.info('This form is not yet implemented');

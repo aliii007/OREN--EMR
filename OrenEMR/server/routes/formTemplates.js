@@ -85,7 +85,8 @@ router.post('/', authenticateToken, async (req, res) => {
       createdBy: req.user.id,
       isPublic: isPublic || false,
       language: language || 'english',
-      items: items || []
+      items: items || [],
+      isActive: true
     });
     
     await newTemplate.save();
