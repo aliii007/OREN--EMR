@@ -96,7 +96,7 @@ const PatientIntakeFormPreview: React.FC = () => {
       return;
     }
     
-    if (currentStep < formTemplate.items.length - 1) {
+    if (currentStep < filteredItems.length - 1) {
       setCurrentStep(currentStep + 1);
       window.scrollTo(0, 0);
     }
