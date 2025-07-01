@@ -32,6 +32,8 @@ import notesRoutes from './routes/notes.js';
 import googleCalendarRoutes from './routes/googleCalendar.js';
 import taskRoutes from './routes/tasks.js';
 import notificationRoutes from './routes/notifications.js';
+import formTemplateRoutes from './routes/formTemplates.js';
+import formResponseRoutes from './routes/formResponses.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001; // Changed port to 5001 to avoid conflict
@@ -73,6 +75,8 @@ app.use('/api/notes', authenticateToken, notesRoutes);
 app.use('/api/google-calendar', authenticateToken, googleCalendarRoutes);
 app.use('/api/tasks', authenticateToken, taskRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
+app.use('/api/form-templates', authenticateToken, formTemplateRoutes);
+app.use('/api/form-responses', authenticateToken, formResponseRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
