@@ -2,31 +2,49 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { useAuth } from '../../contexts/AuthContext';
 import WizardProgressBar from '../../components/patients/WizardProgressBar';
 import WizardFormStep from '../../components/patients/WizardFormStep';
-import SendFormModal, { SendFormData } from '../../components/forms/SendFormModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Define form section interface
 interface FormSection {
   id: string;
   title: string;
   spanishTitle?: string;
-  fields: FormField[];
+  description?: string;
+  spanishDescription?: string;
+  questions: FormQuestion[];
 }
 
-// Define form field interface with various field types
-interface FormField {
+// Define question types
+type QuestionType = 
+  | 'text' 
+  | 'textarea' 
+  | 'select' 
+  | 'radio' 
+  | 'checkbox' 
+  | 'date' 
+  | 'email' 
+  | 'tel'
+  | 'number'
+  | 'address'
+  | 'array'
+  | 'nested';
+
+// Define question interface
+interface FormQuestion {
   id: string;
-  type: 'text' | 'email' | 'tel' | 'date' | 'select' | 'radio' | 'checkbox' | 'textarea' | 'array' | 'address' | 'bodyPart';
+  type: QuestionType;
   label: string;
   spanishLabel?: string;
   placeholder?: string;
   spanishPlaceholder?: string;
   required?: boolean;
   options?: { value: string; label: string; spanishLabel?: string }[];
-  arrayType?: 'text';
-  path: string; // Path to store in patient object (e.g., 'firstName', 'address.street', 'medicalHistory.allergies')
+  subQuestions?: FormQuestion[];
+  path?: string; // Path to store in patient object (e.g., 'medicalHistory.allergies')
+  maxItems?: number; // For array type questions
+  defaultValue?: any;
 }
 
 const PatientWizardForm: React.FC = () => {
@@ -37,84 +55,31 @@ const PatientWizardForm: React.FC = () => {
   
   const [currentStep, setCurrentStep] = useState(0);
   const [language, setLanguage] = useState<'english' | 'spanish'>('english');
+  const [formData, setFormData] = useState<any>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showSendFormModal, setShowSendFormModal] = useState(false);
-  
-  // Initialize patient data with empty values
-  const [patientData, setPatientData] = useState({
-    firstName: '',
-    lastName: '',
-    dateOfBirth: '',
-    gender: '',
-    maritalStatus: '',
-    email: '',
-    phone: '',
-    address: {
-      street: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'USA'
-    },
-    medicalHistory: {
-      allergies: [''],
-      medications: [''],
-      conditions: [''],
-      surgeries: [''],
-      familyHistory: ['']
-    },
-    subjective: {
-      bodyPart: [{ part: '', side: '' }],
-      severity: '',
-      quality: [],
-      timing: '',
-      context: '',
-      exacerbatedBy: [],
-      symptoms: [],
-      notes: '',
-      radiatingTo: '',
-      radiatingRight: false,
-      radiatingLeft: false,
-      sciaticaRight: false,
-      sciaticaLeft: false
-    },
-    attorney: {
-      name: '',
-      firm: '',
-      phone: '',
-      email: '',
-      address: {
-        street: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: 'USA'
-      }
-    },
-    assignedDoctor: user?.role === 'doctor' ? user.id : '',
-    injuryDate: '',
-    status: 'active'
-  });
-  
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
   // Define form sections dynamically
   const formSections: FormSection[] = [
     {
       id: 'language',
       title: 'Language Preference',
       spanishTitle: 'Preferencia de Idioma',
-      fields: [
+      questions: [
         {
-          id: 'language',
+          id: 'preferredLanguage',
           type: 'radio',
-          label: 'Preferred Language',
-          spanishLabel: 'Idioma Preferido',
+          label: 'Please select your preferred language',
+          spanishLabel: 'Por favor seleccione su idioma preferido',
           required: true,
           options: [
-            { value: 'english', label: 'English' },
-            { value: 'spanish', label: 'Español' }
+            { value: 'english', label: 'English', spanishLabel: 'Inglés' },
+            { value: 'spanish', label: 'Spanish', spanishLabel: 'Español' }
           ],
-          path: 'language'
+          path: 'preferredLanguage'
         }
       ]
     },
@@ -122,15 +87,15 @@ const PatientWizardForm: React.FC = () => {
       id: 'personalInfo',
       title: 'Personal Information',
       spanishTitle: 'Información Personal',
-      fields: [
+      questions: [
         {
           id: 'firstName',
           type: 'text',
           label: 'First Name',
           spanishLabel: 'Nombre',
-          placeholder: 'Enter first name',
-          spanishPlaceholder: 'Ingrese nombre',
           required: true,
+          placeholder: 'Enter your first name',
+          spanishPlaceholder: 'Ingrese su nombre',
           path: 'firstName'
         },
         {
@@ -138,9 +103,9 @@ const PatientWizardForm: React.FC = () => {
           type: 'text',
           label: 'Last Name',
           spanishLabel: 'Apellido',
-          placeholder: 'Enter last name',
-          spanishPlaceholder: 'Ingrese apellido',
           required: true,
+          placeholder: 'Enter your last name',
+          spanishPlaceholder: 'Ingrese su apellido',
           path: 'lastName'
         },
         {
@@ -172,13 +137,12 @@ const PatientWizardForm: React.FC = () => {
           label: 'Marital Status',
           spanishLabel: 'Estado Civil',
           options: [
-            { value: '', label: 'Select status', spanishLabel: 'Seleccione estado' },
+            { value: '', label: 'Select marital status', spanishLabel: 'Seleccione estado civil' },
             { value: 'single', label: 'Single', spanishLabel: 'Soltero/a' },
             { value: 'married', label: 'Married', spanishLabel: 'Casado/a' },
-            { value: 'domestic-partner', label: 'Domestic Partner', spanishLabel: 'Pareja de Hecho' },
-            { value: 'separated', label: 'Separated', spanishLabel: 'Separado/a' },
             { value: 'divorced', label: 'Divorced', spanishLabel: 'Divorciado/a' },
-            { value: 'widowed', label: 'Widowed', spanishLabel: 'Viudo/a' }
+            { value: 'widowed', label: 'Widowed', spanishLabel: 'Viudo/a' },
+            { value: 'separated', label: 'Separated', spanishLabel: 'Separado/a' }
           ],
           path: 'maritalStatus'
         }
@@ -188,15 +152,15 @@ const PatientWizardForm: React.FC = () => {
       id: 'contactInfo',
       title: 'Contact Information',
       spanishTitle: 'Información de Contacto',
-      fields: [
+      questions: [
         {
           id: 'email',
           type: 'email',
-          label: 'Email',
+          label: 'Email Address',
           spanishLabel: 'Correo Electrónico',
-          placeholder: 'Enter email address',
-          spanishPlaceholder: 'Ingrese correo electrónico',
           required: true,
+          placeholder: 'Enter your email address',
+          spanishPlaceholder: 'Ingrese su correo electrónico',
           path: 'email'
         },
         {
@@ -204,9 +168,9 @@ const PatientWizardForm: React.FC = () => {
           type: 'tel',
           label: 'Phone Number',
           spanishLabel: 'Número de Teléfono',
-          placeholder: 'Enter phone number',
-          spanishPlaceholder: 'Ingrese número de teléfono',
           required: true,
+          placeholder: 'Enter your phone number',
+          spanishPlaceholder: 'Ingrese su número de teléfono',
           path: 'phone'
         },
         {
@@ -215,7 +179,252 @@ const PatientWizardForm: React.FC = () => {
           label: 'Address',
           spanishLabel: 'Dirección',
           required: true,
-          path: 'address'
+          subQuestions: [
+            {
+              id: 'street',
+              type: 'text',
+              label: 'Street Address',
+              spanishLabel: 'Dirección',
+              placeholder: 'Enter your street address',
+              spanishPlaceholder: 'Ingrese su dirección',
+              path: 'address.street'
+            },
+            {
+              id: 'city',
+              type: 'text',
+              label: 'City',
+              spanishLabel: 'Ciudad',
+              placeholder: 'Enter your city',
+              spanishPlaceholder: 'Ingrese su ciudad',
+              path: 'address.city'
+            },
+            {
+              id: 'state',
+              type: 'text',
+              label: 'State',
+              spanishLabel: 'Estado',
+              placeholder: 'Enter your state',
+              spanishPlaceholder: 'Ingrese su estado',
+              path: 'address.state'
+            },
+            {
+              id: 'zipCode',
+              type: 'text',
+              label: 'Zip Code',
+              spanishLabel: 'Código Postal',
+              placeholder: 'Enter your zip code',
+              spanishPlaceholder: 'Ingrese su código postal',
+              path: 'address.zipCode'
+            },
+            {
+              id: 'country',
+              type: 'text',
+              label: 'Country',
+              spanishLabel: 'País',
+              placeholder: 'Enter your country',
+              spanishPlaceholder: 'Ingrese su país',
+              defaultValue: 'USA',
+              path: 'address.country'
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'emergencyContact',
+      title: 'Emergency Contact',
+      spanishTitle: 'Contacto de Emergencia',
+      questions: [
+        {
+          id: 'emergencyContactName',
+          type: 'text',
+          label: 'Emergency Contact Name',
+          spanishLabel: 'Nombre del Contacto de Emergencia',
+          required: true,
+          placeholder: 'Enter emergency contact name',
+          spanishPlaceholder: 'Ingrese el nombre del contacto de emergencia',
+          path: 'emergencyContact.name'
+        },
+        {
+          id: 'emergencyContactRelationship',
+          type: 'text',
+          label: 'Relationship to You',
+          spanishLabel: 'Relación con Usted',
+          required: true,
+          placeholder: 'Enter relationship',
+          spanishPlaceholder: 'Ingrese la relación',
+          path: 'emergencyContact.relationship'
+        },
+        {
+          id: 'emergencyContactPhone',
+          type: 'tel',
+          label: 'Emergency Contact Phone',
+          spanishLabel: 'Teléfono del Contacto de Emergencia',
+          required: true,
+          placeholder: 'Enter emergency contact phone',
+          spanishPlaceholder: 'Ingrese el teléfono del contacto de emergencia',
+          path: 'emergencyContact.phone'
+        }
+      ]
+    },
+    {
+      id: 'insurance',
+      title: 'Insurance Information',
+      spanishTitle: 'Información del Seguro',
+      questions: [
+        {
+          id: 'hasInsurance',
+          type: 'radio',
+          label: 'Do you have medical insurance?',
+          spanishLabel: '¿Tiene seguro médico?',
+          required: true,
+          options: [
+            { value: 'yes', label: 'Yes', spanishLabel: 'Sí' },
+            { value: 'no', label: 'No', spanishLabel: 'No' }
+          ],
+          path: 'hasInsurance'
+        },
+        {
+          id: 'insuranceInfo',
+          type: 'nested',
+          label: 'Insurance Details',
+          spanishLabel: 'Detalles del Seguro',
+          subQuestions: [
+            {
+              id: 'insuranceProvider',
+              type: 'text',
+              label: 'Insurance Provider',
+              spanishLabel: 'Proveedor de Seguro',
+              placeholder: 'Enter insurance provider',
+              spanishPlaceholder: 'Ingrese el proveedor de seguro',
+              path: 'insurance.provider'
+            },
+            {
+              id: 'insurancePolicyNumber',
+              type: 'text',
+              label: 'Policy Number',
+              spanishLabel: 'Número de Póliza',
+              placeholder: 'Enter policy number',
+              spanishPlaceholder: 'Ingrese el número de póliza',
+              path: 'insurance.policyNumber'
+            },
+            {
+              id: 'insuranceGroupNumber',
+              type: 'text',
+              label: 'Group Number',
+              spanishLabel: 'Número de Grupo',
+              placeholder: 'Enter group number',
+              spanishPlaceholder: 'Ingrese el número de grupo',
+              path: 'insurance.groupNumber'
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'attorney',
+      title: 'Attorney Information',
+      spanishTitle: 'Información del Abogado',
+      questions: [
+        {
+          id: 'hasAttorney',
+          type: 'radio',
+          label: 'Do you have an attorney for this case?',
+          spanishLabel: '¿Tiene un abogado para este caso?',
+          required: true,
+          options: [
+            { value: 'yes', label: 'Yes', spanishLabel: 'Sí' },
+            { value: 'no', label: 'No', spanishLabel: 'No' }
+          ],
+          path: 'hasAttorney'
+        },
+        {
+          id: 'attorneyInfo',
+          type: 'nested',
+          label: 'Attorney Details',
+          spanishLabel: 'Detalles del Abogado',
+          subQuestions: [
+            {
+              id: 'attorneyName',
+              type: 'text',
+              label: 'Attorney Name',
+              spanishLabel: 'Nombre del Abogado',
+              placeholder: 'Enter attorney name',
+              spanishPlaceholder: 'Ingrese el nombre del abogado',
+              path: 'attorney.name'
+            },
+            {
+              id: 'attorneyFirm',
+              type: 'text',
+              label: 'Law Firm',
+              spanishLabel: 'Bufete de Abogados',
+              placeholder: 'Enter law firm name',
+              spanishPlaceholder: 'Ingrese el nombre del bufete de abogados',
+              path: 'attorney.firm'
+            },
+            {
+              id: 'attorneyPhone',
+              type: 'tel',
+              label: 'Attorney Phone',
+              spanishLabel: 'Teléfono del Abogado',
+              placeholder: 'Enter attorney phone',
+              spanishPlaceholder: 'Ingrese el teléfono del abogado',
+              path: 'attorney.phone'
+            },
+            {
+              id: 'attorneyEmail',
+              type: 'email',
+              label: 'Attorney Email',
+              spanishLabel: 'Correo Electrónico del Abogado',
+              placeholder: 'Enter attorney email',
+              spanishPlaceholder: 'Ingrese el correo electrónico del abogado',
+              path: 'attorney.email'
+            },
+            {
+              id: 'attorneyAddress',
+              type: 'address',
+              label: 'Attorney Address',
+              spanishLabel: 'Dirección del Abogado',
+              subQuestions: [
+                {
+                  id: 'attorneyStreet',
+                  type: 'text',
+                  label: 'Street Address',
+                  spanishLabel: 'Dirección',
+                  placeholder: 'Enter street address',
+                  spanishPlaceholder: 'Ingrese la dirección',
+                  path: 'attorney.address.street'
+                },
+                {
+                  id: 'attorneyCity',
+                  type: 'text',
+                  label: 'City',
+                  spanishLabel: 'Ciudad',
+                  placeholder: 'Enter city',
+                  spanishPlaceholder: 'Ingrese la ciudad',
+                  path: 'attorney.address.city'
+                },
+                {
+                  id: 'attorneyState',
+                  type: 'text',
+                  label: 'State',
+                  spanishLabel: 'Estado',
+                  placeholder: 'Enter state',
+                  spanishPlaceholder: 'Ingrese el estado',
+                  path: 'attorney.address.state'
+                },
+                {
+                  id: 'attorneyZipCode',
+                  type: 'text',
+                  label: 'Zip Code',
+                  spanishLabel: 'Código Postal',
+                  placeholder: 'Enter zip code',
+                  spanishPlaceholder: 'Ingrese el código postal',
+                  path: 'attorney.address.zipCode'
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -223,56 +432,56 @@ const PatientWizardForm: React.FC = () => {
       id: 'medicalHistory',
       title: 'Medical History',
       spanishTitle: 'Historia Médica',
-      fields: [
+      questions: [
         {
           id: 'allergies',
           type: 'array',
-          arrayType: 'text',
           label: 'Allergies',
           spanishLabel: 'Alergias',
           placeholder: 'Enter allergy',
           spanishPlaceholder: 'Ingrese alergia',
-          path: 'medicalHistory.allergies'
+          path: 'medicalHistory.allergies',
+          maxItems: 10
         },
         {
           id: 'medications',
           type: 'array',
-          arrayType: 'text',
           label: 'Current Medications',
           spanishLabel: 'Medicamentos Actuales',
           placeholder: 'Enter medication',
           spanishPlaceholder: 'Ingrese medicamento',
-          path: 'medicalHistory.medications'
+          path: 'medicalHistory.medications',
+          maxItems: 10
         },
         {
           id: 'conditions',
           type: 'array',
-          arrayType: 'text',
           label: 'Medical Conditions',
           spanishLabel: 'Condiciones Médicas',
           placeholder: 'Enter condition',
           spanishPlaceholder: 'Ingrese condición',
-          path: 'medicalHistory.conditions'
+          path: 'medicalHistory.conditions',
+          maxItems: 10
         },
         {
           id: 'surgeries',
           type: 'array',
-          arrayType: 'text',
           label: 'Past Surgeries',
           spanishLabel: 'Cirugías Previas',
           placeholder: 'Enter surgery',
           spanishPlaceholder: 'Ingrese cirugía',
-          path: 'medicalHistory.surgeries'
+          path: 'medicalHistory.surgeries',
+          maxItems: 10
         },
         {
           id: 'familyHistory',
           type: 'array',
-          arrayType: 'text',
           label: 'Family Medical History',
           spanishLabel: 'Historia Médica Familiar',
           placeholder: 'Enter family history',
           spanishPlaceholder: 'Ingrese historia familiar',
-          path: 'medicalHistory.familyHistory'
+          path: 'medicalHistory.familyHistory',
+          maxItems: 10
         }
       ]
     },
@@ -280,7 +489,7 @@ const PatientWizardForm: React.FC = () => {
       id: 'injuryInfo',
       title: 'Injury Information',
       spanishTitle: 'Información de la Lesión',
-      fields: [
+      questions: [
         {
           id: 'injuryDate',
           type: 'date',
@@ -289,11 +498,53 @@ const PatientWizardForm: React.FC = () => {
           path: 'injuryDate'
         },
         {
+          id: 'injuryDescription',
+          type: 'textarea',
+          label: 'Describe how the injury occurred',
+          spanishLabel: 'Describa cómo ocurrió la lesión',
+          placeholder: 'Please provide details about how the injury happened',
+          spanishPlaceholder: 'Por favor proporcione detalles sobre cómo ocurrió la lesión',
+          path: 'injuryDescription'
+        }
+      ]
+    },
+    {
+      id: 'subjectiveInfo',
+      title: 'Subjective Information',
+      spanishTitle: 'Información Subjetiva',
+      questions: [
+        {
           id: 'bodyParts',
-          type: 'bodyPart',
+          type: 'array',
           label: 'Affected Body Parts',
           spanishLabel: 'Partes del Cuerpo Afectadas',
-          path: 'subjective.bodyPart'
+          path: 'subjective.bodyPart',
+          maxItems: 10,
+          subQuestions: [
+            {
+              id: 'part',
+              type: 'text',
+              label: 'Body Part',
+              spanishLabel: 'Parte del Cuerpo',
+              placeholder: 'e.g., Neck, Back, Shoulder',
+              spanishPlaceholder: 'ej., Cuello, Espalda, Hombro',
+              path: 'part'
+            },
+            {
+              id: 'side',
+              type: 'select',
+              label: 'Side',
+              spanishLabel: 'Lado',
+              options: [
+                { value: '', label: 'Select side', spanishLabel: 'Seleccione lado' },
+                { value: 'left', label: 'Left', spanishLabel: 'Izquierdo' },
+                { value: 'right', label: 'Right', spanishLabel: 'Derecho' },
+                { value: 'both', label: 'Both', spanishLabel: 'Ambos' },
+                { value: 'n/a', label: 'N/A', spanishLabel: 'N/A' }
+              ],
+              path: 'side'
+            }
+          ]
         },
         {
           id: 'severity',
@@ -335,8 +586,8 @@ const PatientWizardForm: React.FC = () => {
         {
           id: 'timing',
           type: 'select',
-          label: 'Pain Timing',
-          spanishLabel: 'Frecuencia del Dolor',
+          label: 'Timing',
+          spanishLabel: 'Frecuencia',
           options: [
             { value: '', label: 'Select timing', spanishLabel: 'Seleccione frecuencia' },
             { value: 'constant', label: 'Constant', spanishLabel: 'Constante' },
@@ -344,31 +595,31 @@ const PatientWizardForm: React.FC = () => {
             { value: 'worse-morning', label: 'Worse in the morning', spanishLabel: 'Peor en la mañana' },
             { value: 'worse-evening', label: 'Worse in the evening', spanishLabel: 'Peor en la noche' },
             { value: 'worse-activity', label: 'Worse with activity', spanishLabel: 'Peor con actividad' },
-            { value: 'worse-rest', label: 'Worse with rest', spanishLabel: 'Peor en reposo' }
+            { value: 'worse-rest', label: 'Worse with rest', spanishLabel: 'Peor con descanso' }
           ],
           path: 'subjective.timing'
         },
         {
           id: 'context',
           type: 'textarea',
-          label: 'Context (How did the injury occur?)',
-          spanishLabel: 'Contexto (¿Cómo ocurrió la lesión?)',
-          placeholder: 'Describe how the injury occurred',
-          spanishPlaceholder: 'Describa cómo ocurrió la lesión',
+          label: 'Context',
+          spanishLabel: 'Contexto',
+          placeholder: 'Describe the context of your symptoms',
+          spanishPlaceholder: 'Describa el contexto de sus síntomas',
           path: 'subjective.context'
         },
         {
           id: 'exacerbatedBy',
           type: 'checkbox',
-          label: 'Pain is Exacerbated By',
-          spanishLabel: 'El Dolor se Agrava Con',
+          label: 'Exacerbated By',
+          spanishLabel: 'Exacerbado Por',
           options: [
             { value: 'sitting', label: 'Sitting', spanishLabel: 'Sentarse' },
             { value: 'standing', label: 'Standing', spanishLabel: 'Estar de pie' },
             { value: 'walking', label: 'Walking', spanishLabel: 'Caminar' },
-            { value: 'bending', label: 'Bending', spanishLabel: 'Agacharse' },
-            { value: 'lifting', label: 'Lifting', spanishLabel: 'Levantar peso' },
-            { value: 'twisting', label: 'Twisting', spanishLabel: 'Girar' },
+            { value: 'bending', label: 'Bending', spanishLabel: 'Inclinarse' },
+            { value: 'lifting', label: 'Lifting', spanishLabel: 'Levantar' },
+            { value: 'twisting', label: 'Twisting', spanishLabel: 'Torcer' },
             { value: 'reaching', label: 'Reaching', spanishLabel: 'Alcanzar' },
             { value: 'pushing', label: 'Pushing', spanishLabel: 'Empujar' },
             { value: 'pulling', label: 'Pulling', spanishLabel: 'Jalar' }
@@ -384,24 +635,33 @@ const PatientWizardForm: React.FC = () => {
             { value: 'headache', label: 'Headache', spanishLabel: 'Dolor de cabeza' },
             { value: 'dizziness', label: 'Dizziness', spanishLabel: 'Mareo' },
             { value: 'nausea', label: 'Nausea', spanishLabel: 'Náusea' },
-            { value: 'weakness', label: 'Weakness', spanishLabel: 'Debilidad' },
             { value: 'fatigue', label: 'Fatigue', spanishLabel: 'Fatiga' },
-            { value: 'sleep-disturbance', label: 'Sleep Disturbance', spanishLabel: 'Alteración del sueño' },
-            { value: 'anxiety', label: 'Anxiety', spanishLabel: 'Ansiedad' },
-            { value: 'depression', label: 'Depression', spanishLabel: 'Depresión' }
+            { value: 'weakness', label: 'Weakness', spanishLabel: 'Debilidad' },
+            { value: 'stiffness', label: 'Stiffness', spanishLabel: 'Rigidez' },
+            { value: 'swelling', label: 'Swelling', spanishLabel: 'Hinchazón' },
+            { value: 'limited-mobility', label: 'Limited mobility', spanishLabel: 'Movilidad limitada' }
           ],
           path: 'subjective.symptoms'
         },
         {
-          id: 'radiatingPain',
+          id: 'radiatingTo',
+          type: 'text',
+          label: 'Radiating To',
+          spanishLabel: 'Irradiando A',
+          placeholder: 'Describe where the pain radiates to',
+          spanishPlaceholder: 'Describa hacia dónde se irradia el dolor',
+          path: 'subjective.radiatingTo'
+        },
+        {
+          id: 'radiatingDirection',
           type: 'checkbox',
-          label: 'Radiating Pain',
-          spanishLabel: 'Dolor Irradiado',
+          label: 'Radiating Direction',
+          spanishLabel: 'Dirección de Irradiación',
           options: [
-            { value: 'radiatingRight', label: 'Right Side', spanishLabel: 'Lado Derecho' },
-            { value: 'radiatingLeft', label: 'Left Side', spanishLabel: 'Lado Izquierdo' }
+            { value: 'radiatingRight', label: 'Right', spanishLabel: 'Derecha' },
+            { value: 'radiatingLeft', label: 'Left', spanishLabel: 'Izquierda' }
           ],
-          path: 'subjective.radiating'
+          path: 'subjective.radiatingDirection'
         },
         {
           id: 'sciatica',
@@ -409,8 +669,8 @@ const PatientWizardForm: React.FC = () => {
           label: 'Sciatica',
           spanishLabel: 'Ciática',
           options: [
-            { value: 'sciaticaRight', label: 'Right Side', spanishLabel: 'Lado Derecho' },
-            { value: 'sciaticaLeft', label: 'Left Side', spanishLabel: 'Lado Izquierdo' }
+            { value: 'sciaticaRight', label: 'Right', spanishLabel: 'Derecha' },
+            { value: 'sciaticaLeft', label: 'Left', spanishLabel: 'Izquierda' }
           ],
           path: 'subjective.sciatica'
         },
@@ -419,383 +679,213 @@ const PatientWizardForm: React.FC = () => {
           type: 'textarea',
           label: 'Additional Notes',
           spanishLabel: 'Notas Adicionales',
-          placeholder: 'Any additional information about your condition',
-          spanishPlaceholder: 'Cualquier información adicional sobre su condición',
+          placeholder: 'Any additional information about your symptoms',
+          spanishPlaceholder: 'Cualquier información adicional sobre sus síntomas',
           path: 'subjective.notes'
         }
       ]
     },
     {
-      id: 'attorney',
-      title: 'Attorney Information',
-      spanishTitle: 'Información del Abogado',
-      fields: [
+      id: 'doctorAssignment',
+      title: 'Doctor Assignment',
+      spanishTitle: 'Asignación de Doctor',
+      questions: [
         {
-          id: 'hasAttorney',
-          type: 'radio',
-          label: 'Do you have an attorney for this case?',
-          spanishLabel: '¿Tiene un abogado para este caso?',
-          options: [
-            { value: 'yes', label: 'Yes', spanishLabel: 'Sí' },
-            { value: 'no', label: 'No', spanishLabel: 'No' }
-          ],
-          path: 'hasAttorney'
-        },
-        {
-          id: 'attorneyName',
-          type: 'text',
-          label: 'Attorney Name',
-          spanishLabel: 'Nombre del Abogado',
-          placeholder: 'Enter attorney name',
-          spanishPlaceholder: 'Ingrese nombre del abogado',
-          path: 'attorney.name'
-        },
-        {
-          id: 'attorneyFirm',
-          type: 'text',
-          label: 'Law Firm',
-          spanishLabel: 'Bufete de Abogados',
-          placeholder: 'Enter law firm name',
-          spanishPlaceholder: 'Ingrese nombre del bufete',
-          path: 'attorney.firm'
-        },
-        {
-          id: 'attorneyPhone',
-          type: 'tel',
-          label: 'Attorney Phone',
-          spanishLabel: 'Teléfono del Abogado',
-          placeholder: 'Enter attorney phone',
-          spanishPlaceholder: 'Ingrese teléfono del abogado',
-          path: 'attorney.phone'
-        },
-        {
-          id: 'attorneyEmail',
-          type: 'email',
-          label: 'Attorney Email',
-          spanishLabel: 'Correo del Abogado',
-          placeholder: 'Enter attorney email',
-          spanishPlaceholder: 'Ingrese correo del abogado',
-          path: 'attorney.email'
-        },
-        {
-          id: 'attorneyAddress',
-          type: 'address',
-          label: 'Attorney Address',
-          spanishLabel: 'Dirección del Abogado',
-          path: 'attorney.address'
+          id: 'assignedDoctor',
+          type: 'select',
+          label: 'Assigned Doctor',
+          spanishLabel: 'Doctor Asignado',
+          required: true,
+          options: [], // Will be populated dynamically
+          path: 'assignedDoctor'
         }
       ]
     },
     {
       id: 'review',
-      title: 'Review & Submit',
-      spanishTitle: 'Revisar y Enviar',
-      fields: []
+      title: 'Review Information',
+      spanishTitle: 'Revisar Información',
+      questions: [] // No questions, just review
     }
   ];
-  
-  // Get step titles for progress bar
-  const stepTitles = formSections.map(section => language === 'english' ? section.title : section.spanishTitle || section.title);
-  
-  // Fetch patient data if in edit mode
+
+  // Fetch doctors on component mount
   useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/auth/doctors');
+        setDoctors(response.data);
+        
+        // Update the doctor options in the form
+        const doctorOptions = response.data.map((doctor: any) => ({
+          value: doctor._id,
+          label: `Dr. ${doctor.firstName} ${doctor.lastName}`,
+          spanishLabel: `Dr. ${doctor.firstName} ${doctor.lastName}`
+        }));
+        
+        // Find the doctor assignment section and update its options
+        const updatedSections = [...formSections];
+        const doctorSectionIndex = updatedSections.findIndex(section => section.id === 'doctorAssignment');
+        if (doctorSectionIndex !== -1) {
+          updatedSections[doctorSectionIndex].questions[0].options = doctorOptions;
+        }
+        
+        // If user is a doctor, set the assigned doctor to the current user
+        if (user?.role === 'doctor') {
+          setFormData(prev => ({
+            ...prev,
+            assignedDoctor: user.id
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching doctors:', error);
+        toast.error('Failed to fetch doctors');
+      }
+    };
+    
+    fetchDoctors();
+    
+    // If in edit mode, fetch patient data
     if (isEditMode && id) {
-      fetchPatientData();
+      fetchPatientData(id);
     }
-  }, [isEditMode, id]);
-  
-  // Fetch patient data from API
-  const fetchPatientData = async () => {
+  }, [isEditMode, id, user]);
+
+  // Fetch patient data if in edit mode
+  const fetchPatientData = async (patientId: string) => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/patients/${id}`);
-      setPatientData(response.data);
+      const response = await axios.get(`http://localhost:5000/api/patients/${patientId}`);
+      setFormData(response.data);
       
-      // Set language based on patient data if available
+      // Set language based on patient's preferred language
       if (response.data.preferredLanguage) {
         setLanguage(response.data.preferredLanguage);
       }
     } catch (error) {
       console.error('Error fetching patient data:', error);
-      toast.error('Failed to load patient data');
+      toast.error('Failed to fetch patient data');
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   // Handle form field changes
   const handleChange = (path: string, value: any) => {
-    // Split the path into parts (e.g., 'address.street' -> ['address', 'street'])
-    const pathParts = path.split('.');
-    
-    setPatientData(prevData => {
-      // Create a copy of the previous data
-      const newData = { ...prevData };
+    // Update form data using the path
+    setFormData(prev => {
+      const newData = { ...prev };
+      setNestedValue(newData, path, value);
       
-      // Navigate to the correct nested object
-      let current = newData;
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        current = current[pathParts[i]];
+      // If changing language preference, update the language state
+      if (path === 'preferredLanguage') {
+        setLanguage(value);
       }
-      
-      // Set the value at the final path
-      current[pathParts[pathParts.length - 1]] = value;
       
       return newData;
     });
     
-    // Save data in real-time if needed
-    if (isEditMode && id) {
-      savePatientDataDebounced(id, patientData);
+    // Set up auto-save timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
     }
+    
+    const timer = setTimeout(() => {
+      autoSaveData();
+    }, 2000); // Auto-save after 2 seconds of inactivity
+    
+    setAutoSaveTimer(timer);
   };
-  
-  // Handle array field changes
-  const handleArrayChange = (path: string, index: number, value: any) => {
-    // Split the path into parts (e.g., 'medicalHistory.allergies' -> ['medicalHistory', 'allergies'])
-    const pathParts = path.split('.');
+
+  // Set a nested value in an object using a path string (e.g., 'address.street')
+  const setNestedValue = (obj: any, path: string, value: any) => {
+    const keys = path.split('.');
+    let current = obj;
     
-    setPatientData(prevData => {
-      // Create a copy of the previous data
-      const newData = { ...prevData };
-      
-      // Navigate to the correct nested object
-      let current = newData;
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        current = current[pathParts[i]];
+    for (let i = 0; i < keys.length - 1; i++) {
+      const key = keys[i];
+      if (!current[key]) {
+        current[key] = {};
       }
-      
-      // Update the array at the specified index
-      const arrayName = pathParts[pathParts.length - 1];
-      const newArray = [...current[arrayName]];
-      newArray[index] = value;
-      current[arrayName] = newArray;
-      
-      return newData;
-    });
-    
-    // Save data in real-time if needed
-    if (isEditMode && id) {
-      savePatientDataDebounced(id, patientData);
+      current = current[key];
     }
-  };
-  
-  // Add item to array
-  const addArrayItem = (path: string, defaultValue: any = '') => {
-    // Split the path into parts
-    const pathParts = path.split('.');
     
-    setPatientData(prevData => {
-      // Create a copy of the previous data
-      const newData = { ...prevData };
-      
-      // Navigate to the correct nested object
-      let current = newData;
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        current = current[pathParts[i]];
-      }
-      
-      // Add item to the array
-      const arrayName = pathParts[pathParts.length - 1];
-      current[arrayName] = [...current[arrayName], defaultValue];
-      
-      return newData;
-    });
+    current[keys[keys.length - 1]] = value;
   };
-  
-  // Remove item from array
-  const removeArrayItem = (path: string, index: number) => {
-    // Split the path into parts
-    const pathParts = path.split('.');
+
+  // Get a nested value from an object using a path string
+  const getNestedValue = (obj: any, path: string) => {
+    const keys = path.split('.');
+    let current = obj;
     
-    setPatientData(prevData => {
-      // Create a copy of the previous data
-      const newData = { ...prevData };
-      
-      // Navigate to the correct nested object
-      let current = newData;
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        current = current[pathParts[i]];
+    for (const key of keys) {
+      if (current === undefined || current === null) {
+        return undefined;
       }
-      
-      // Remove item from the array
-      const arrayName = pathParts[pathParts.length - 1];
-      const newArray = [...current[arrayName]];
-      newArray.splice(index, 1);
-      current[arrayName] = newArray;
-      
-      return newData;
-    });
-  };
-  
-  // Handle checkbox changes
-  const handleCheckboxChange = (path: string, value: string, checked: boolean) => {
-    // Split the path into parts
-    const pathParts = path.split('.');
+      current = current[key];
+    }
     
-    setPatientData(prevData => {
-      // Create a copy of the previous data
-      const newData = { ...prevData };
-      
-      // Navigate to the correct nested object
-      let current = newData;
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        current = current[pathParts[i]];
-      }
-      
-      // Update the array based on checked status
-      const arrayName = pathParts[pathParts.length - 1];
-      let newArray = [...current[arrayName]];
-      
-      if (checked) {
-        // Add value if not already in array
-        if (!newArray.includes(value)) {
-          newArray.push(value);
-        }
-      } else {
-        // Remove value from array
-        newArray = newArray.filter(item => item !== value);
-      }
-      
-      current[arrayName] = newArray;
-      
-      return newData;
-    });
+    return current;
   };
-  
-  // Handle special checkbox fields (like radiating pain and sciatica)
-  const handleSpecialCheckboxChange = (field: string, checked: boolean) => {
-    setPatientData(prevData => ({
-      ...prevData,
-      subjective: {
-        ...prevData.subjective,
-        [field]: checked
-      }
-    }));
-  };
-  
-  // Handle body part changes
-  const handleBodyPartChange = (index: number, field: 'part' | 'side', value: string) => {
-    setPatientData(prevData => {
-      const newBodyParts = [...prevData.subjective.bodyPart];
-      newBodyParts[index] = {
-        ...newBodyParts[index],
-        [field]: value
-      };
-      
-      return {
-        ...prevData,
-        subjective: {
-          ...prevData.subjective,
-          bodyPart: newBodyParts
-        }
-      };
-    });
-  };
-  
-  // Add body part
-  const addBodyPart = () => {
-    setPatientData(prevData => ({
-      ...prevData,
-      subjective: {
-        ...prevData.subjective,
-        bodyPart: [...prevData.subjective.bodyPart, { part: '', side: '' }]
-      }
-    }));
-  };
-  
-  // Remove body part
-  const removeBodyPart = (index: number) => {
-    setPatientData(prevData => {
-      const newBodyParts = [...prevData.subjective.bodyPart];
-      newBodyParts.splice(index, 1);
-      
-      return {
-        ...prevData,
-        subjective: {
-          ...prevData.subjective,
-          bodyPart: newBodyParts
-        }
-      };
-    });
-  };
-  
-  // Create a debounced version of savePatientData for real-time saving
-  const savePatientDataDebounced = (patientId: string, data: any) => {
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      savePatientData(patientId, data, false);
-    }, 1000); // 1 second delay
-  };
-  
-  let saveTimeout: NodeJS.Timeout | null = null;
-  
-  // Save patient data to API
-  const savePatientData = async (patientId: string | null, data: any, showToast: boolean = true) => {
+
+  // Auto-save data to the server
+  const autoSaveData = async () => {
+    // Only auto-save if we have enough data
+    if (!formData.firstName || !formData.lastName) {
+      return;
+    }
+    
     try {
-      setIsSaving(true);
-      
-      // Prepare data for API
-      const patientDataToSave = {
-        ...data,
-        assignedDoctor: user?.role === 'doctor' ? user.id : data.assignedDoctor
-      };
-      
       let response;
       
-      if (patientId) {
+      if (isEditMode && id) {
         // Update existing patient
-        response = await axios.put(`http://localhost:5000/api/patients/${patientId}`, patientDataToSave);
-        if (showToast) toast.success('Patient updated successfully');
+        response = await axios.put(`http://localhost:5000/api/patients/${id}`, formData);
       } else {
         // Create new patient
-        response = await axios.post('http://localhost:5000/api/patients', patientDataToSave);
-        if (showToast) toast.success('Patient created successfully');
+        response = await axios.post('http://localhost:5000/api/patients', formData);
+        
+        // If this is a new patient, update the URL to edit mode
+        if (response.data.patient && response.data.patient._id) {
+          navigate(`/patients/${response.data.patient._id}/edit`, { replace: true });
+        }
       }
       
-      return response.data.patient;
+      setLastSaved(new Date());
     } catch (error) {
-      console.error('Error saving patient data:', error);
-      if (showToast) toast.error('Failed to save patient data');
-      throw error;
+      console.error('Error auto-saving data:', error);
+      // Don't show toast for auto-save errors to avoid spamming the user
+    }
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    
+    try {
+      let response;
+      
+      if (isEditMode && id) {
+        // Update existing patient
+        response = await axios.put(`http://localhost:5000/api/patients/${id}`, formData);
+        toast.success('Patient updated successfully');
+      } else {
+        // Create new patient
+        response = await axios.post('http://localhost:5000/api/patients', formData);
+        toast.success('Patient created successfully');
+      }
+      
+      // Navigate to patient details page
+      navigate(`/patients/${isEditMode ? id : response.data.patient._id}`);
+    } catch (error) {
+      console.error('Error saving patient:', error);
+      toast.error('Failed to save patient');
     } finally {
       setIsSaving(false);
     }
   };
-  
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const savedPatient = await savePatientData(id, patientData);
-      navigate(`/patients/${savedPatient._id}`);
-    } catch (error) {
-      console.error('Error submitting form:', error);
-    }
-  };
-  
-  // Handle sending form to client
-  const handleSendForm = async (formData: SendFormData) => {
-    try {
-      const response = await axios.post('http://localhost:5000/api/patients/send-to-client', {
-        ...formData,
-        patientId: id,
-        language: language
-      });
-      
-      toast.success('Form sent successfully to client');
-      setShowSendFormModal(false);
-      
-      // Return the form link for display
-      return response.data.formLink;
-    } catch (error) {
-      console.error('Error sending form:', error);
-      toast.error('Failed to send form to client');
-      throw error;
-    }
-  };
-  
+
   // Navigation functions
   const nextStep = () => {
     if (currentStep < formSections.length - 1) {
@@ -817,133 +907,148 @@ const PatientWizardForm: React.FC = () => {
       window.scrollTo(0, 0);
     }
   };
-  
-  // Render form field based on type
-  const renderField = (field: FormField) => {
-    const fieldLabel = language === 'english' ? field.label : field.spanishLabel || field.label;
-    const fieldPlaceholder = language === 'english' ? field.placeholder : field.spanishPlaceholder || field.placeholder;
+
+  // Render a form question based on its type
+  const renderQuestion = (question: FormQuestion) => {
+    const label = language === 'spanish' && question.spanishLabel ? question.spanishLabel : question.label;
+    const placeholder = language === 'spanish' && question.spanishPlaceholder ? question.spanishPlaceholder : question.placeholder;
+    const value = question.path ? getNestedValue(formData, question.path) : '';
     
-    switch (field.type) {
+    switch (question.type) {
       case 'text':
       case 'email':
       case 'tel':
-        return (
-          <div key={field.id} className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
-            </label>
-            <input
-              type={field.type}
-              value={getNestedValue(patientData, field.path)}
-              onChange={(e) => handleChange(field.path, e.target.value)}
-              placeholder={fieldPlaceholder}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              required={field.required}
-            />
-          </div>
-        );
-        
+      case 'number':
       case 'date':
         return (
-          <div key={field.id} className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
+          <div className="mb-4">
+            <label htmlFor={question.id} className="block text-sm font-medium text-gray-700 mb-1">
+              {label} {question.required && <span className="text-red-500">*</span>}
             </label>
             <input
-              type="date"
-              value={getNestedValue(patientData, field.path)}
-              onChange={(e) => handleChange(field.path, e.target.value)}
+              type={question.type}
+              id={question.id}
+              value={value || ''}
+              onChange={(e) => handleChange(question.path!, e.target.value)}
+              placeholder={placeholder}
+              required={question.required}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              required={field.required}
             />
           </div>
         );
-        
+      
+      case 'textarea':
+        return (
+          <div className="mb-4">
+            <label htmlFor={question.id} className="block text-sm font-medium text-gray-700 mb-1">
+              {label} {question.required && <span className="text-red-500">*</span>}
+            </label>
+            <textarea
+              id={question.id}
+              value={value || ''}
+              onChange={(e) => handleChange(question.path!, e.target.value)}
+              placeholder={placeholder}
+              required={question.required}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        );
+      
       case 'select':
         return (
-          <div key={field.id} className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
+          <div className="mb-4">
+            <label htmlFor={question.id} className="block text-sm font-medium text-gray-700 mb-1">
+              {label} {question.required && <span className="text-red-500">*</span>}
             </label>
             <select
-              value={getNestedValue(patientData, field.path)}
-              onChange={(e) => handleChange(field.path, e.target.value)}
+              id={question.id}
+              value={value || ''}
+              onChange={(e) => handleChange(question.path!, e.target.value)}
+              required={question.required}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              required={field.required}
             >
-              {field.options?.map(option => (
+              {question.options?.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {language === 'english' ? option.label : option.spanishLabel || option.label}
+                  {language === 'spanish' && option.spanishLabel ? option.spanishLabel : option.label}
                 </option>
               ))}
             </select>
           </div>
         );
-        
+      
       case 'radio':
         return (
-          <div key={field.id} className="mb-4">
+          <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
+              {label} {question.required && <span className="text-red-500">*</span>}
             </label>
             <div className="space-y-2">
-              {field.options?.map(option => (
+              {question.options?.map((option) => (
                 <label key={option.value} className="flex items-center">
                   <input
                     type="radio"
-                    name={field.id}
+                    name={question.id}
                     value={option.value}
-                    checked={getNestedValue(patientData, field.path) === option.value}
-                    onChange={(e) => handleChange(field.path, e.target.value)}
+                    checked={value === option.value}
+                    onChange={() => handleChange(question.path!, option.value)}
+                    required={question.required}
                     className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    required={field.required}
                   />
                   <span className="ml-2 text-gray-700">
-                    {language === 'english' ? option.label : option.spanishLabel || option.label}
+                    {language === 'spanish' && option.spanishLabel ? option.spanishLabel : option.label}
                   </span>
                 </label>
               ))}
             </div>
           </div>
         );
-        
+      
       case 'checkbox':
         return (
-          <div key={field.id} className="mb-4">
+          <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
+              {label} {question.required && <span className="text-red-500">*</span>}
             </label>
             <div className="space-y-2">
-              {field.options?.map(option => {
-                // Handle special checkbox fields for radiating pain and sciatica
-                if (field.path === 'subjective.radiating' || field.path === 'subjective.sciatica') {
+              {question.options?.map((option) => {
+                // For checkboxes that map to individual boolean fields
+                if (option.value.startsWith('radiating') || option.value.startsWith('sciatica')) {
+                  const checkboxValue = getNestedValue(formData, `subjective.${option.value}`) || false;
                   return (
                     <label key={option.value} className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={patientData.subjective[option.value]}
-                        onChange={(e) => handleSpecialCheckboxChange(option.value, e.target.checked)}
+                        name={option.value}
+                        checked={checkboxValue}
+                        onChange={(e) => handleChange(`subjective.${option.value}`, e.target.checked)}
                         className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
                       <span className="ml-2 text-gray-700">
-                        {language === 'english' ? option.label : option.spanishLabel || option.label}
+                        {language === 'spanish' && option.spanishLabel ? option.spanishLabel : option.label}
                       </span>
                     </label>
                   );
                 }
                 
-                // Regular checkbox fields
-                const values = getNestedValue(patientData, field.path) || [];
+                // For checkboxes that map to arrays
+                const arrayValue = Array.isArray(value) ? value : [];
                 return (
                   <label key={option.value} className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={values.includes(option.value)}
-                      onChange={(e) => handleCheckboxChange(field.path, option.value, e.target.checked)}
+                      name={option.value}
+                      checked={arrayValue.includes(option.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.checked
+                          ? [...arrayValue, option.value]
+                          : arrayValue.filter(v => v !== option.value);
+                        handleChange(question.path!, newValue);
+                      }}
                       className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
                     <span className="ml-2 text-gray-700">
-                      {language === 'english' ? option.label : option.spanishLabel || option.label}
+                      {language === 'spanish' && option.spanishLabel ? option.spanishLabel : option.label}
                     </span>
                   </label>
                 );
@@ -951,371 +1056,231 @@ const PatientWizardForm: React.FC = () => {
             </div>
           </div>
         );
-        
-      case 'textarea':
-        return (
-          <div key={field.id} className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
-            </label>
-            <textarea
-              value={getNestedValue(patientData, field.path)}
-              onChange={(e) => handleChange(field.path, e.target.value)}
-              placeholder={fieldPlaceholder}
-              rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              required={field.required}
-            />
-          </div>
-        );
-        
-      case 'array':
-        const arrayValues = getNestedValue(patientData, field.path) || [];
-        return (
-          <div key={field.id} className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
-            </label>
-            <div className="space-y-2">
-              {arrayValues.map((value: string, index: number) => (
-                <div key={index} className="flex items-center">
-                  <input
-                    type="text"
-                    value={value}
-                    onChange={(e) => handleArrayChange(field.path, index, e.target.value)}
-                    placeholder={fieldPlaceholder}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeArrayItem(field.path, index)}
-                    className="ml-2 p-2 text-red-600 hover:text-red-800"
-                    aria-label="Remove item"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => addArrayItem(field.path)}
-                className="mt-1 px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
-              >
-                {language === 'english' ? '+ Add Item' : '+ Agregar Elemento'}
-              </button>
-            </div>
-          </div>
-        );
-        
+      
       case 'address':
-        const addressPath = field.path;
-        const address = getNestedValue(patientData, addressPath) || {};
-        
         return (
-          <div key={field.id} className="mb-4">
+          <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
+              {label} {question.required && <span className="text-red-500">*</span>}
             </label>
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={address.street || ''}
-                onChange={(e) => handleChange(`${addressPath}.street`, e.target.value)}
-                placeholder={language === 'english' ? 'Street Address' : 'Dirección'}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                required={field.required}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  value={address.city || ''}
-                  onChange={(e) => handleChange(`${addressPath}.city`, e.target.value)}
-                  placeholder={language === 'english' ? 'City' : 'Ciudad'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  required={field.required}
-                />
-                <input
-                  type="text"
-                  value={address.state || ''}
-                  onChange={(e) => handleChange(`${addressPath}.state`, e.target.value)}
-                  placeholder={language === 'english' ? 'State' : 'Estado'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  required={field.required}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  value={address.zipCode || ''}
-                  onChange={(e) => handleChange(`${addressPath}.zipCode`, e.target.value)}
-                  placeholder={language === 'english' ? 'Zip Code' : 'Código Postal'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  required={field.required}
-                />
-                <input
-                  type="text"
-                  value={address.country || 'USA'}
-                  onChange={(e) => handleChange(`${addressPath}.country`, e.target.value)}
-                  placeholder={language === 'english' ? 'Country' : 'País'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
+            <div className="space-y-4 p-4 border border-gray-300 rounded-md">
+              {question.subQuestions?.map((subQuestion) => renderQuestion(subQuestion))}
             </div>
           </div>
         );
-        
-      case 'bodyPart':
-        const bodyParts = patientData.subjective.bodyPart || [];
-        
+      
+      case 'array':
+        const arrayValue = Array.isArray(value) ? value : [];
         return (
-          <div key={field.id} className="mb-4">
+          <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {fieldLabel}{field.required && <span className="text-red-500">*</span>}
+              {label} {question.required && <span className="text-red-500">*</span>}
             </label>
             <div className="space-y-2">
-              {bodyParts.map((part: { part: string; side: string }, index: number) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <select
-                    value={part.part}
-                    onChange={(e) => handleBodyPartChange(index, 'part', e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">{language === 'english' ? 'Select body part' : 'Seleccione parte del cuerpo'}</option>
-                    <option value="neck">{language === 'english' ? 'Neck' : 'Cuello'}</option>
-                    <option value="shoulder">{language === 'english' ? 'Shoulder' : 'Hombro'}</option>
-                    <option value="arm">{language === 'english' ? 'Arm' : 'Brazo'}</option>
-                    <option value="elbow">{language === 'english' ? 'Elbow' : 'Codo'}</option>
-                    <option value="wrist">{language === 'english' ? 'Wrist' : 'Muñeca'}</option>
-                    <option value="hand">{language === 'english' ? 'Hand' : 'Mano'}</option>
-                    <option value="upper-back">{language === 'english' ? 'Upper Back' : 'Espalda Superior'}</option>
-                    <option value="mid-back">{language === 'english' ? 'Mid Back' : 'Espalda Media'}</option>
-                    <option value="lower-back">{language === 'english' ? 'Lower Back' : 'Espalda Baja'}</option>
-                    <option value="hip">{language === 'english' ? 'Hip' : 'Cadera'}</option>
-                    <option value="leg">{language === 'english' ? 'Leg' : 'Pierna'}</option>
-                    <option value="knee">{language === 'english' ? 'Knee' : 'Rodilla'}</option>
-                    <option value="ankle">{language === 'english' ? 'Ankle' : 'Tobillo'}</option>
-                    <option value="foot">{language === 'english' ? 'Foot' : 'Pie'}</option>
-                  </select>
-                  
-                  <select
-                    value={part.side}
-                    onChange={(e) => handleBodyPartChange(index, 'side', e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">{language === 'english' ? 'Select side' : 'Seleccione lado'}</option>
-                    <option value="left">{language === 'english' ? 'Left' : 'Izquierdo'}</option>
-                    <option value="right">{language === 'english' ? 'Right' : 'Derecho'}</option>
-                    <option value="both">{language === 'english' ? 'Both' : 'Ambos'}</option>
-                    <option value="center">{language === 'english' ? 'Center/Midline' : 'Centro'}</option>
-                  </select>
-                  
+              {arrayValue.map((item, index) => (
+                <div key={index} className="flex items-center">
+                  {question.subQuestions ? (
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      {question.subQuestions.map((subQuestion) => {
+                        const subPath = `${question.path}[${index}].${subQuestion.path}`;
+                        const subValue = getNestedValue(formData, subPath);
+                        const subLabel = language === 'spanish' && subQuestion.spanishLabel ? subQuestion.spanishLabel : subQuestion.label;
+                        const subPlaceholder = language === 'spanish' && subQuestion.spanishPlaceholder ? subQuestion.spanishPlaceholder : subQuestion.placeholder;
+                        
+                        if (subQuestion.type === 'select') {
+                          return (
+                            <div key={subQuestion.id} className="flex-1">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">{subLabel}</label>
+                              <select
+                                value={subValue || ''}
+                                onChange={(e) => handleChange(subPath, e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              >
+                                {subQuestion.options?.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {language === 'spanish' && option.spanishLabel ? option.spanishLabel : option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <div key={subQuestion.id} className="flex-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">{subLabel}</label>
+                            <input
+                              type="text"
+                              value={subValue || ''}
+                              onChange={(e) => handleChange(subPath, e.target.value)}
+                              placeholder={subPlaceholder}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={item}
+                      onChange={(e) => {
+                        const newArray = [...arrayValue];
+                        newArray[index] = e.target.value;
+                        handleChange(question.path!, newArray);
+                      }}
+                      placeholder={placeholder}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  )}
                   <button
                     type="button"
-                    onClick={() => removeBodyPart(index)}
-                    className="p-2 text-red-600 hover:text-red-800"
-                    aria-label="Remove body part"
+                    onClick={() => {
+                      const newArray = [...arrayValue];
+                      newArray.splice(index, 1);
+                      handleChange(question.path!, newArray);
+                    }}
+                    className="ml-2 p-2 text-red-600 hover:text-red-800"
                   >
-                    ✕
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
                   </button>
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={addBodyPart}
-                className="mt-1 px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
-              >
-                {language === 'english' ? '+ Add Body Part' : '+ Agregar Parte del Cuerpo'}
-              </button>
+              {(!question.maxItems || arrayValue.length < question.maxItems) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newItem = question.subQuestions ? {} : '';
+                    handleChange(question.path!, [...arrayValue, newItem]);
+                  }}
+                  className="mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 text-sm"
+                >
+                  {language === 'spanish' ? 'Agregar' : 'Add'} {label.toLowerCase()}
+                </button>
+              )}
             </div>
           </div>
         );
+      
+      case 'nested':
+        // Only show nested questions if they should be visible (e.g., based on a parent question)
+        const shouldShowNested = () => {
+          if (question.id === 'insuranceInfo') {
+            return getNestedValue(formData, 'hasInsurance') === 'yes';
+          }
+          if (question.id === 'attorneyInfo') {
+            return getNestedValue(formData, 'hasAttorney') === 'yes';
+          }
+          return true;
+        };
         
+        if (!shouldShowNested()) {
+          return null;
+        }
+        
+        return (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {label} {question.required && <span className="text-red-500">*</span>}
+            </label>
+            <div className="space-y-4 p-4 border border-gray-300 rounded-md">
+              {question.subQuestions?.map((subQuestion) => renderQuestion(subQuestion))}
+            </div>
+          </div>
+        );
+      
       default:
         return null;
     }
   };
-  
-  // Helper function to get nested value from object using path string
-  const getNestedValue = (obj: any, path: string) => {
-    const pathParts = path.split('.');
-    let current = obj;
-    
-    for (const part of pathParts) {
-      if (current === undefined || current === null) {
-        return undefined;
-      }
-      current = current[part];
-    }
-    
-    return current;
-  };
-  
-  // Render review section with all patient data
-  const renderReviewSection = () => {
+
+  // Render the review section
+  const renderReview = () => {
     return (
       <div className="space-y-6">
-        <div className="bg-blue-50 p-4 rounded-md">
-          <p className="text-blue-800">
-            {language === 'english'
-              ? 'Please review all information before submitting. You can go back to any section to make changes.'
-              : 'Por favor revise toda la información antes de enviar. Puede volver a cualquier sección para hacer cambios.'}
-          </p>
-        </div>
+        <p className="text-gray-700">
+          {language === 'spanish'
+            ? 'Por favor revise la información que ha proporcionado. Si necesita hacer cambios, puede navegar a la sección correspondiente utilizando la barra de progreso.'
+            : 'Please review the information you have provided. If you need to make changes, you can navigate to the corresponding section using the progress bar.'}
+        </p>
         
-        {/* Personal Information */}
-        <div className="border rounded-md p-4">
-          <h3 className="font-medium text-lg mb-2">
-            {language === 'english' ? 'Personal Information' : 'Información Personal'}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Name' : 'Nombre'}</p>
-              <p>{patientData.firstName} {patientData.lastName}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Date of Birth' : 'Fecha de Nacimiento'}</p>
-              <p>{patientData.dateOfBirth}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Gender' : 'Género'}</p>
-              <p>{patientData.gender}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Marital Status' : 'Estado Civil'}</p>
-              <p>{patientData.maritalStatus}</p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Contact Information */}
-        <div className="border rounded-md p-4">
-          <h3 className="font-medium text-lg mb-2">
-            {language === 'english' ? 'Contact Information' : 'Información de Contacto'}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Email' : 'Correo Electrónico'}</p>
-              <p>{patientData.email}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Phone' : 'Teléfono'}</p>
-              <p>{patientData.phone}</p>
-            </div>
-            <div className="md:col-span-2">
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Address' : 'Dirección'}</p>
-              <p>{patientData.address.street}</p>
-              <p>{patientData.address.city}, {patientData.address.state} {patientData.address.zipCode}</p>
-              <p>{patientData.address.country}</p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Medical History */}
-        <div className="border rounded-md p-4">
-          <h3 className="font-medium text-lg mb-2">
-            {language === 'english' ? 'Medical History' : 'Historia Médica'}
-          </h3>
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Allergies' : 'Alergias'}</p>
-              <ul className="list-disc pl-5">
-                {patientData.medicalHistory.allergies.map((allergy: string, index: number) => (
-                  allergy && <li key={index}>{allergy}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Medications' : 'Medicamentos'}</p>
-              <ul className="list-disc pl-5">
-                {patientData.medicalHistory.medications.map((medication: string, index: number) => (
-                  medication && <li key={index}>{medication}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Medical Conditions' : 'Condiciones Médicas'}</p>
-              <ul className="list-disc pl-5">
-                {patientData.medicalHistory.conditions.map((condition: string, index: number) => (
-                  condition && <li key={index}>{condition}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Past Surgeries' : 'Cirugías Previas'}</p>
-              <ul className="list-disc pl-5">
-                {patientData.medicalHistory.surgeries.map((surgery: string, index: number) => (
-                  surgery && <li key={index}>{surgery}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-        
-        {/* Injury Information */}
-        <div className="border rounded-md p-4">
-          <h3 className="font-medium text-lg mb-2">
-            {language === 'english' ? 'Injury Information' : 'Información de la Lesión'}
-          </h3>
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Date of Injury' : 'Fecha de la Lesión'}</p>
-              <p>{patientData.injuryDate}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Affected Body Parts' : 'Partes del Cuerpo Afectadas'}</p>
-              <ul className="list-disc pl-5">
-                {patientData.subjective.bodyPart.map((part: { part: string; side: string }, index: number) => (
-                  part.part && <li key={index}>{part.part} ({part.side})</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Pain Severity' : 'Severidad del Dolor'}</p>
-              <p>{patientData.subjective.severity}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Pain Quality' : 'Calidad del Dolor'}</p>
-              <p>{patientData.subjective.quality.join(', ')}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{language === 'english' ? 'Context' : 'Contexto'}</p>
-              <p>{patientData.subjective.context}</p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Attorney Information */}
-        {patientData.attorney && patientData.attorney.name && (
-          <div className="border rounded-md p-4">
-            <h3 className="font-medium text-lg mb-2">
-              {language === 'english' ? 'Attorney Information' : 'Información del Abogado'}
+        {formSections.slice(0, -1).map((section) => (
+          <div key={section.id} className="border border-gray-200 rounded-md p-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {language === 'spanish' && section.spanishTitle ? section.spanishTitle : section.title}
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-500">{language === 'english' ? 'Attorney Name' : 'Nombre del Abogado'}</p>
-                <p>{patientData.attorney.name}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">{language === 'english' ? 'Law Firm' : 'Bufete de Abogados'}</p>
-                <p>{patientData.attorney.firm}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">{language === 'english' ? 'Contact' : 'Contacto'}</p>
-                <p>{patientData.attorney.phone}</p>
-                <p>{patientData.attorney.email}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">{language === 'english' ? 'Address' : 'Dirección'}</p>
-                <p>{patientData.attorney.address.street}</p>
-                <p>{patientData.attorney.address.city}, {patientData.attorney.address.state} {patientData.attorney.address.zipCode}</p>
-              </div>
-            </div>
+            <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+              {section.questions.map((question) => {
+                // Skip nested questions in the review
+                if (question.type === 'nested') return null;
+                
+                // Skip questions that shouldn't be shown based on conditions
+                if (question.id === 'insuranceInfo' && getNestedValue(formData, 'hasInsurance') !== 'yes') return null;
+                if (question.id === 'attorneyInfo' && getNestedValue(formData, 'hasAttorney') !== 'yes') return null;
+                
+                const label = language === 'spanish' && question.spanishLabel ? question.spanishLabel : question.label;
+                let value = question.path ? getNestedValue(formData, question.path) : '';
+                
+                // Format the value based on question type
+                if (question.type === 'select' && question.options) {
+                  const option = question.options.find(opt => opt.value === value);
+                  if (option) {
+                    value = language === 'spanish' && option.spanishLabel ? option.spanishLabel : option.label;
+                  }
+                } else if (question.type === 'radio' && question.options) {
+                  const option = question.options.find(opt => opt.value === value);
+                  if (option) {
+                    value = language === 'spanish' && option.spanishLabel ? option.spanishLabel : option.label;
+                  }
+                } else if (question.type === 'checkbox' && question.options && Array.isArray(value)) {
+                  const selectedOptions = question.options.filter(opt => value.includes(opt.value));
+                  value = selectedOptions.map(opt => 
+                    language === 'spanish' && opt.spanishLabel ? opt.spanishLabel : opt.label
+                  ).join(', ');
+                } else if (question.type === 'array' && Array.isArray(value)) {
+                  if (question.subQuestions) {
+                    // Complex array with subquestions
+                    value = value.map((item: any) => {
+                      const parts = [];
+                      for (const subQ of question.subQuestions!) {
+                        const subValue = item[subQ.path!];
+                        if (subValue) {
+                          if (subQ.type === 'select' && subQ.options) {
+                            const option = subQ.options.find(opt => opt.value === subValue);
+                            if (option) {
+                              parts.push(`${language === 'spanish' && subQ.spanishLabel ? subQ.spanishLabel : subQ.label}: ${language === 'spanish' && option.spanishLabel ? option.spanishLabel : option.label}`);
+                            }
+                          } else {
+                            parts.push(`${language === 'spanish' && subQ.spanishLabel ? subQ.spanishLabel : subQ.label}: ${subValue}`);
+                          }
+                        }
+                      }
+                      return parts.join(', ');
+                    }).join('; ');
+                  } else {
+                    // Simple array
+                    value = value.join(', ');
+                  }
+                } else if (question.type === 'date' && value) {
+                  value = new Date(value).toLocaleDateString();
+                }
+                
+                return (
+                  <div key={question.id} className="py-2">
+                    <dt className="text-sm font-medium text-gray-500">{label}</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{value || 'N/A'}</dd>
+                  </div>
+                );
+              })}
+            </dl>
           </div>
-        )}
+        ))}
       </div>
     );
   };
-  
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -1323,104 +1288,95 @@ const PatientWizardForm: React.FC = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-800">
-          {isEditMode
-            ? language === 'english'
-              ? 'Edit Patient'
-              : 'Editar Paciente'
-            : language === 'english'
-            ? 'New Patient'
-            : 'Nuevo Paciente'}
+          {isEditMode 
+            ? (language === 'spanish' ? 'Editar Paciente' : 'Edit Patient') 
+            : (language === 'spanish' ? 'Nuevo Paciente' : 'New Patient')}
         </h1>
-        
-        {isEditMode && (
-          <button
-            type="button"
-            onClick={() => setShowSendFormModal(true)}
-            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
-          >
-            {language === 'english' ? 'Send to Patient' : 'Enviar al Paciente'}
-          </button>
+        {lastSaved && (
+          <p className="text-sm text-gray-500 mt-1">
+            {language === 'spanish' ? 'Último guardado automático:' : 'Last auto-saved:'} {lastSaved.toLocaleTimeString()}
+          </p>
         )}
       </div>
       
-      <WizardProgressBar
-        steps={stepTitles}
-        currentStep={currentStep}
+      <WizardProgressBar 
+        steps={formSections.map(section => language === 'spanish' && section.spanishTitle ? section.spanishTitle : section.title)} 
+        currentStep={currentStep} 
         onStepClick={goToStep}
         language={language}
       />
       
       <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6">
-        {/* Render current step */}
         {formSections.map((section, index) => (
-          <WizardFormStep
+          <WizardFormStep 
             key={section.id}
-            title={section.title}
+            title={section.title} 
             spanishTitle={section.spanishTitle}
             isActive={currentStep === index}
             language={language}
           >
             {index === formSections.length - 1 ? (
-              renderReviewSection()
+              // Render review section
+              renderReview()
             ) : (
+              // Render questions for this section
               <div className="space-y-4">
-                {section.fields.map(field => renderField(field))}
+                {section.description && (
+                  <p className="text-gray-600 mb-4">
+                    {language === 'spanish' && section.spanishDescription ? section.spanishDescription : section.description}
+                  </p>
+                )}
+                {section.questions.map(question => renderQuestion(question))}
               </div>
             )}
+            
+            <div className="mt-8 flex justify-between">
+              {currentStep > 0 && (
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  {language === 'spanish' ? 'Anterior' : 'Previous'}
+                </button>
+              )}
+              <div className="flex-1"></div>
+              {currentStep < formSections.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  {language === 'spanish' ? 'Siguiente' : 'Next'}
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-400"
+                >
+                  {isSaving ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {language === 'spanish' ? 'Guardando...' : 'Saving...'}
+                    </span>
+                  ) : (
+                    language === 'spanish' ? 'Guardar Paciente' : 'Save Patient'
+                  )}
+                </button>
+              )}
+            </div>
           </WizardFormStep>
         ))}
-        
-        {/* Navigation buttons */}
-        <div className="mt-8 flex justify-between">
-          {currentStep > 0 ? (
-            <button
-              type="button"
-              onClick={prevStep}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            >
-              {language === 'english' ? 'Previous' : 'Anterior'}
-            </button>
-          ) : (
-            <div></div> // Empty div to maintain flex spacing
-          )}
-          
-          {currentStep < formSections.length - 1 ? (
-            <button
-              type="button"
-              onClick={nextStep}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              {language === 'english' ? 'Next' : 'Siguiente'}
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-400"
-            >
-              {isSaving ? (
-                language === 'english' ? 'Saving...' : 'Guardando...'
-              ) : (
-                language === 'english' ? 'Save Patient' : 'Guardar Paciente'
-              )}
-            </button>
-          )}
-        </div>
       </form>
-      
-      {/* Send Form Modal */}
-      {showSendFormModal && (
-        <SendFormModal
-          isOpen={showSendFormModal}
-          onClose={() => setShowSendFormModal(false)}
-          onSend={handleSendForm}
-        />
-      )}
     </div>
   );
 };
